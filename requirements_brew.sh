@@ -1,0 +1,1 @@
+brew install pkg-config libgphoto2 gphoto2 exiftool
