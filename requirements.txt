@@ -4,3 +4,5 @@ psutil
 pydantic
 fastapi
 black
+numpy
+pillow

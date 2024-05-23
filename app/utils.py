@@ -1,3 +1,7 @@
+"""
+Helper functions
+"""
+
 import enum
 import logging
 import os
@@ -12,6 +16,12 @@ if TYPE_CHECKING:
 
 
 def timed(f):
+    """
+
+    :param f:
+    :return:
+    """
+
     @wraps(f)
     def wrap(*args, **kw):
         ts = time.perf_counter()
@@ -24,6 +34,10 @@ def timed(f):
 
 
 class GPWidgetItem(enum.IntEnum):
+    """
+    GP Widget State Enum
+    """
+
     GP_WIDGET_BUTTON = 7
     GP_WIDGET_DATE = 8
     GP_WIDGET_MENU = 6
@@ -35,6 +49,10 @@ class GPWidgetItem(enum.IntEnum):
     GP_WIDGET_WINDOW = 0
 
     def get_value_type(self):
+        """
+        Return the data type returned by various widget types
+        :return:
+        """
         try:
             return {
                 self.GP_WIDGET_DATE: int,
@@ -72,9 +90,7 @@ def generate_pydantic_config(camera: "Camera", target_path: Path):
                 _handle(child_node)
 
                 if child_node["value_type"] is None:
-                    current_node.append(
-                        f"\t{child_node['name']}: Optional[P_{child_node['name']}] = None"
-                    )
+                    current_node.append(f"\t{child_node['name']}: Optional[P_{child_node['name']}] = None")
                 else:
                     # if child_node["value_type"] == str:
                     #     default_value = f"'{child_node['value'].encode('unicode_escape').decode('utf8')}'"
@@ -86,9 +102,7 @@ def generate_pydantic_config(camera: "Camera", target_path: Path):
                         type_val = f"Literal['{ov}']"
                     else:
                         type_val = child_node["value_type"].__name__
-                    current_node.append(
-                        f"\t{child_node['name']}: Optional[{type_val}] = None"
-                    )
+                    current_node.append(f"\t{child_node['name']}: Optional[{type_val}] = None")
 
         if current_node:
             config_nodes.append(current_node)

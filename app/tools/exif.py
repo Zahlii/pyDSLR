@@ -1,6 +1,10 @@
+"""
+Quick EXIF tools
+"""
+
 from pathlib import Path
 
-import exiftool
+import exiftool  # type: ignore
 
 e_tool = exiftool.ExifToolHelper()
 

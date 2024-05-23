@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "dslr_tool"
+version = "0.1.0"
+description = "Abstraction on top of gphoto2 to allow quick and easy and type-safe operation of cameras."
+authors = ["Niklas Frühauf <niklas.fruehauf@sovanta.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+gphoto2 = "*"
+pytz= "*"
+psutil= "*"
+pydantic= "*"
+fastapi= "*"
+black= "*"
+numpy= "*"
+pillow= "*"
+
+[tool.poetry.dev-dependencies]
+pylint= "*"
+mypy= "*"
+types-psutil= "*"
+types-pytz= "*"
+black = "*"
+
+[tool.pylint]
+max-line-length = 150
+# poetry run pylint **/*.py
+
+[tool.mypy]
+# poetry run mypy . --explicit-package-bases
+
+[tool.black]
+line-length = 150
+# poetry run black .
+
+[build-system]
+requires = ["poetry"]
