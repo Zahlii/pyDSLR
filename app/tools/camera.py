@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Set, Tuple, Optional, Generic, TypeVar, get_args, Generator
+from typing import Generator, Generic, Optional, Set, Tuple, TypeVar, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
@@ -18,9 +18,9 @@ import psutil
 from PIL import Image
 
 from app.config.base import BaseConfig
-from app.config.r6m2 import R6M2Config, ImageSettings, CaptureSettings, Settings
+from app.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Settings
 from app.tools.exif import get_exif
-from app.utils import timed, GPWidgetItem
+from app.utils import GPWidgetItem, timed
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 
@@ -255,8 +255,8 @@ class Camera(Generic[T]):
                     GPWidgetItem.GP_WIDGET_MENU,
                     GPWidgetItem.GP_WIDGET_RADIO,
                 ):
-                    for j in range(node.count_choices()):
-                        config["options"].append(node.get_choice(j))
+                    for k in range(node.count_choices()):
+                        config["options"].append(node.get_choice(k))
 
                     if value not in config["options"]:
                         config["options"].append(value)

@@ -22,6 +22,7 @@ mypy= "*"
 types-psutil= "*"
 types-pytz= "*"
 black = "*"
+isort = "*"
 
 [tool.pylint]
 max-line-length = 150
@@ -33,6 +34,11 @@ max-line-length = 150
 [tool.black]
 line-length = 150
 # poetry run black .
+
+[tool.isort]
+# poetry run isort .
+profile = "black"
+line_length = 150
 
 [build-system]
 requires = ["poetry"]
