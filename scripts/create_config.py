@@ -3,8 +3,8 @@ Helper to create new config files
 """
 import argparse
 
-from app.tools.camera import Camera
-from app.utils import generate_pydantic_config
+from pydslr.tools.camera import Camera
+from pydslr.utils import generate_pydantic_config
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a new config entry for your camera.")

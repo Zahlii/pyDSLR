@@ -5,7 +5,7 @@ from typing import Literal, Optional
 import pytz
 from pydantic import BaseModel
 
-from app.config.base import BaseConfig
+from pydslr.config.base import BaseConfig
 
 
 class ActionSettings(BaseModel):

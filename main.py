@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
-from app.tools.camera import Camera, T
+from pydslr.tools.camera import Camera, T
 
 camera: Optional[Camera] = None
 
@@ -16,7 +16,7 @@ camera: Optional[Camera] = None
 @asynccontextmanager
 async def lifespan(_):
     """
-    Handle camera context manager behind FastAPI app
+    Handle camera context manager behind FastAPI pydslr
     :param _:
     :return:
     """

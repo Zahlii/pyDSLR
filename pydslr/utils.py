@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.tools.camera import Camera
+    from pydslr.tools.camera import Camera
 
 
 def timed(f):
@@ -77,7 +77,7 @@ def generate_pydantic_config(camera: "Camera", file_name: str, class_prefix: str
             "# pylint: skip-file",
             "from typing import Literal, Optional",
             "from pydantic import BaseModel",
-            "from app.config.base import BaseConfig",
+            "from pydslr.config.base import BaseConfig",
         ]
     ]
     tree = camera.get_json_config()

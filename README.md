@@ -1,4 +1,4 @@
-# DSLR Tool
+# pyDSLR - Python Camera Control Made Easy
 
 This library aims at providing an easy to use and fully typed interface to cameras supported by libgphoto2, allowing you to 
 capture images and video streams much easier than with native bindings.
@@ -7,8 +7,8 @@ The main idea is to have you specify your camera config base class whenever work
 
 ```python
 from pathlib import Path
-from app.tools.camera import Camera
-from app.config.r6m2 import R6M2Config, ImageSettings, Settings, CaptureSettings
+from pydslr.tools.camera import Camera
+from pydslr.config.r6m2 import R6M2Config, ImageSettings, Settings, CaptureSettings
 
 with Camera[R6M2Config]() as c:
     with c.config_context(

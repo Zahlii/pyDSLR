@@ -17,10 +17,10 @@ import numpy as np
 import psutil
 from PIL import Image
 
-from app.config.base import BaseConfig
-from app.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Settings
-from app.tools.exif import get_exif
-from app.utils import GPWidgetItem, timed
+from pydslr.config.base import BaseConfig
+from pydslr.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Settings
+from pydslr.tools.exif import get_exif
+from pydslr.utils import GPWidgetItem, timed
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 
