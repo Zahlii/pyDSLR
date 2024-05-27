@@ -131,6 +131,69 @@ class Camera(Generic[T]):
                 yield self.preview_as_numpy()
 
     @timed
+    def highspeed_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False):
+        """
+        Keeps the shutter button pressed fully for the given time, downloading all captured images.
+
+        :param shutter_press_time:
+        :param folder:
+        :param keep_on_camera:
+        :return:
+        """
+
+        if folder is None:
+            folder = Path().parent
+
+        if not folder.exists():
+            raise ValueError(f"Folder {folder} does not exist")
+
+        self.set_config(self.get_config().press_shutter())
+        start_at = datetime.datetime.now()
+
+        _backlog = []
+
+        while True:
+            elapsed = datetime.datetime.now() - start_at
+            remaining = (shutter_press_time - elapsed).total_seconds()
+            if remaining > 0:
+                evt = tuple(gp.gp_camera_wait_for_event(self.camera, int(1000 * remaining)))
+                if evt[1] == gp.GP_EVENT_FILE_ADDED:
+                    _backlog.append(evt[2])
+            else:
+                break
+
+        self.set_config(self.get_config().release_shutter())
+
+        start_wait_at = datetime.datetime.now()
+        while (datetime.datetime.now() - start_wait_at).total_seconds() < 20:
+            evt = gp.gp_camera_wait_for_event(self.camera, 100)
+            if evt[1] == gp.GP_EVENT_FILE_ADDED:
+                _backlog.append(evt[2])
+            elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
+                break
+
+        for file in _backlog:
+            _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
+            c_path = folder / file.name
+            c_file.save(str(c_path))
+
+            exif_data = get_exif(c_path)
+            logging.info("Got picture with EXIF: %s in %s", exif_data, c_path)
+
+            if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
+                gp.gp_camera_file_delete(self.camera, file.folder, file.name)
+
+    def wait_for_event(self, event_id: int, timeout: int = 1000):
+        """
+        Wrapper around low-level event handler
+        :param event_id:
+        :param timeout:
+        :return:
+        """
+
+        raise PyDSLRException(f"No event {event_id} within timeout.")
+
+    @timed
     def capture(self, path: Optional[Path] = None, keep_on_camera: bool = False):
         """
         Capture a full image to disk.
@@ -143,17 +206,14 @@ class Camera(Generic[T]):
                 assert ".cr3" in path.suffixes, "RAW format enabled, file format should be cr3"
             else:
                 assert ".jpg" in path.suffixes or ".jpeg" in path.suffixes, "RAW format disabled, image should be stores as JPG."
-        else:
-            if self.get_config().is_raw():
-                path = Path("image.cr3")
-            else:
-                path = Path("image.jpg")
 
         _, file = gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE)
+        if path is None:
+            path = Path(file.name)
         _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
         c_file.save(str(path))
 
-        if not keep_on_camera or self.get_config().is_sdcard_capture_enabled():
+        if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
             gp.gp_camera_file_delete(self.camera, file.folder, file.name)
 
         if os.stat(path).st_size == 0:
@@ -161,7 +221,7 @@ class Camera(Generic[T]):
             raise PyDSLRException("Got zero-byte image during capture(). Make sure auto focus is possible.")
 
         exif_data = get_exif(path)
-        logging.info("Got picture with EXIF: %s", exif_data)
+        logging.info("Got picture with EXIF: %s in %s", exif_data, path)
         return exif_data
 
     def get_config(self) -> "T":

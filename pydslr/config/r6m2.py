@@ -1,6 +1,6 @@
 # pylint: skip-file
 import datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, Self
 
 import pytz
 from pydantic import BaseModel
@@ -494,6 +494,7 @@ class CaptureSettings(BaseModel):
     # actually, bulb means "Auto"
     shutterspeed: Optional[
         Literal[
+            "auto",
             "bulb",
             "30",
             "25",
@@ -574,6 +575,20 @@ class CaptureSettings(BaseModel):
 
 
 class R6M2Config(BaseConfig):
+    def press_shutter(self) -> Self:
+        copied = self.model_copy(deep=True)
+        if copied.actions is None:
+            copied.actions = ActionSettings()
+        copied.actions.eosremoterelease = "Press Full"
+        return copied
+
+    def release_shutter(self) -> Self:
+        copied = self.model_copy(deep=True)
+        if copied.actions is None:
+            copied.actions = ActionSettings()
+        copied.actions.eosremoterelease = "Release Full"
+        return copied
+
     def get_camera_time(self) -> Optional[datetime.datetime]:
         if self.settings is None or self.settings.datetimeutc is None:
             return None
@@ -584,6 +599,9 @@ class R6M2Config(BaseConfig):
 
     def is_sdcard_capture_enabled(self):
         return "card" in self.settings.capturetarget.lower()
+
+    def get_sd_root_folder(self) -> str:
+        return "/store_00010001/DCIM/100EOSR6"
 
     actions: Optional[ActionSettings] = None
     settings: Optional[Settings] = None

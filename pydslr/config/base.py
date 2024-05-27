@@ -4,7 +4,7 @@ Base interface for configurations
 
 import datetime
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Self
 
 from pydantic import BaseModel
 
@@ -35,5 +35,26 @@ class BaseConfig(BaseModel, ABC):
         """
         Return whether sdcard capture is enabled (or internal memory is used)
 
+        :return:
+        """
+
+    @abstractmethod
+    def press_shutter(self) -> Self:
+        """
+        Return a config modified to press the shutter
+        :return:
+        """
+
+    @abstractmethod
+    def release_shutter(self) -> Self:
+        """
+        Return a config modified to press the shutter
+        :return:
+        """
+
+    @abstractmethod
+    def get_sd_root_folder(self) -> str:
+        """
+        Return the root folder to be used with gp_list_files to retrieve SD card contents
         :return:
         """

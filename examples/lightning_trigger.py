@@ -23,7 +23,7 @@ if __name__ == "__main__":
         with c.config_context(
             R6M2Config(
                 imgsettings=ImageSettings(iso="100", imageformat="cRAW"),
-                capturesettings=CaptureSettings(aperture="5.6", shutterspeed="bulb", autoexposuremode="AV", exposurecompensation="-1"),
+                capturesettings=CaptureSettings(aperture="5.6", shutterspeed="bulb", autoexposuremodedial="AV", exposurecompensation="-1"),
             )
         ):
             IMG_TENSOR = None
