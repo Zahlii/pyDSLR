@@ -1,9 +1,10 @@
 """
 Helper to create new config files
 """
+
 import argparse
 
-from pydslr.tools.camera import Camera
+from pydslr import Camera
 from pydslr.utils import generate_pydantic_config
 
 if __name__ == "__main__":

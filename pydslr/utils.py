@@ -123,3 +123,9 @@ def generate_pydantic_config(camera: "Camera", file_name: str, class_prefix: str
             f.write("\n")
 
     os.system(f"black {target_path}")
+
+
+class PyDSLRException(Exception):
+    """
+    Top class for all errors
+    """

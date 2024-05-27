@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
-from pydslr.tools.camera import Camera, T
+from pydslr.tools.camera import Camera
 
 camera: Optional[Camera] = None
 
@@ -39,13 +39,13 @@ def stream():
     return StreamingResponse(camera.stream_preview(), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
-@app.get("/config", response_model=T)
+@app.get("/config")
 def config():
     """
 
     :return:
     """
-    return camera.config
+    return camera.get_config()
 
 
 if __name__ == "__main__":

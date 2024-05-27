@@ -6,9 +6,9 @@ Main Camera class
 import datetime
 import io
 import logging
+import os
 import time
 from contextlib import contextmanager
-from functools import cached_property
 from pathlib import Path
 from typing import Generator, Generic, Optional, Set, Tuple, TypeVar, get_args
 
@@ -20,7 +20,7 @@ from PIL import Image
 from pydslr.config.base import BaseConfig
 from pydslr.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Settings
 from pydslr.tools.exif import get_exif
-from pydslr.utils import GPWidgetItem, timed
+from pydslr.utils import GPWidgetItem, PyDSLRException, timed
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 
@@ -36,6 +36,7 @@ class Camera(Generic[T]):
         self._maybe_kill_ptp()
         # pylint: disable=not-callable
         self.camera = gp.Camera()
+        self._config = None
 
     def __enter__(self):
         self.camera.init()
@@ -63,8 +64,9 @@ class Camera(Generic[T]):
         this may not yet fully reflect it, as the camera usually keeps the preview buffered.
         :return:
         """
-        file = gp.check_result(gp.gp_camera_capture_preview(self.camera))
-        return gp.check_result(gp.gp_file_get_data_and_size(file))
+        _, file = gp.gp_camera_capture_preview(self.camera)
+        data = bytearray(gp.gp_file_get_data_and_size(file)[1])
+        return data
 
     def preview_as_numpy(self) -> np.ndarray:
         """
@@ -74,7 +76,7 @@ class Camera(Generic[T]):
         with io.BytesIO() as buffer:
             buffer.write(self.preview_as_bytes())
             buffer.seek(0)
-            return np.asarray(Image.open(buffer, formats="JPEG"))
+            return np.asarray(Image.open(buffer))
 
     @timed
     def preview_to_file(self, path: Optional[Path] = None):
@@ -88,7 +90,6 @@ class Camera(Generic[T]):
         else:
             path = Path("preview.jpg")
         data = self.preview_as_bytes()
-
         with path.open("wb") as fp:
             fp.write(data)
 
@@ -96,10 +97,12 @@ class Camera(Generic[T]):
         self,
         max_fps: Optional[int] = None,
         max_time: Optional[datetime.timedelta] = None,
+        max_images: Optional[int] = None,
         as_numpy=False,
     ) -> Generator[bytes | np.ndarray, None, None]:
         """
         Yield images as part of a media stream
+        :param max_images: Max number of images to return.
         :param as_numpy: Return data as a numpy array
         :param max_fps: Maximum FPS
         :param max_time: Maximum time to stream images
@@ -108,6 +111,7 @@ class Camera(Generic[T]):
         last = None
         first = datetime.datetime.utcnow()
         delay = None if max_fps is None else datetime.timedelta(milliseconds=1000 / max_fps)
+        count = 0
         while True:
             if last is not None and delay is not None:
                 remaining_delay = last + delay - datetime.datetime.utcnow()
@@ -117,8 +121,12 @@ class Camera(Generic[T]):
             if max_time is not None and (last - first) > max_time:
                 return
 
+            if max_images is not None and count >= max_images:
+                return
+
+            count += 1
             if not as_numpy:
-                yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + bytearray(self.preview_as_bytes()) + b"\r\n"
+                yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + self.preview_as_bytes() + b"\r\n"
             else:
                 yield self.preview_as_numpy()
 
@@ -131,29 +139,32 @@ class Camera(Generic[T]):
         :return:
         """
         if path is not None:
-            if self.config.is_raw():
+            if self.get_config().is_raw():
                 assert ".cr3" in path.suffixes, "RAW format enabled, file format should be cr3"
             else:
                 assert ".jpg" in path.suffixes or ".jpeg" in path.suffixes, "RAW format disabled, image should be stores as JPG."
         else:
-            if self.config.is_raw():
+            if self.get_config().is_raw():
                 path = Path("image.cr3")
             else:
                 path = Path("image.jpg")
 
-        file = gp.check_result(gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE))
-        c_file = gp.check_result(gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL))
+        _, file = gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE)
+        _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
         c_file.save(str(path))
 
-        if not keep_on_camera or self.config.is_sdcard_capture_enabled():
+        if not keep_on_camera or self.get_config().is_sdcard_capture_enabled():
             gp.gp_camera_file_delete(self.camera, file.folder, file.name)
+
+        if os.stat(path).st_size == 0:
+            path.unlink()
+            raise PyDSLRException("Got zero-byte image during capture(). Make sure auto focus is possible.")
 
         exif_data = get_exif(path)
         logging.info("Got picture with EXIF: %s", exif_data)
         return exif_data
 
-    @cached_property
-    def config(self) -> "T":
+    def get_config(self) -> "T":
         """
         Get the current configuration of the camera.
         :return:
@@ -175,7 +186,7 @@ class Camera(Generic[T]):
         :param new_config:
         :return:
         """
-        old_config = self.config
+        old_config = self.get_config()
         changed_fields = self.set_config(new_config)
         yield
         self.set_config(old_config, only_fields=changed_fields)
@@ -191,9 +202,8 @@ class Camera(Generic[T]):
         :return:
         """
         updated_settings = set()
-        old_config = self.config
-
-        gp_config = gp.check_result(gp.gp_camera_get_config(self.camera))
+        old_config = self.get_config()
+        gp_config = self._gp_get_camera_config_cached()
 
         for field in new_config.model_fields_set:
             if getattr(new_config, field, None) is not None:
@@ -210,20 +220,28 @@ class Camera(Generic[T]):
                             new_value,
                         )
                         updated_settings.add((field, field2))
-                        gp_field = gp.check_result(gp.gp_widget_get_child_by_name(gp_config, field2))
-                        gp.check_result(gp.gp_widget_set_value(gp_field, new_value))
+                        _, gp_field = gp.gp_widget_get_child_by_name(gp_config, field2)
+                        gp.gp_widget_set_value(gp_field, new_value)
 
         if updated_settings:
-            self.__dict__.pop("config", None)
-            gp.check_result(gp.gp_camera_set_config(self.camera, gp_config))
+            # this may throw I/O errors, but works
+            gp.gp_camera_set_config(self.camera, gp_config)
+            self._config = gp_config
+
         return updated_settings
+
+    @timed
+    def _gp_get_camera_config_cached(self):
+        if self._config is None:
+            self._config = self.camera.get_config()
+        return self._config
 
     def get_json_config(self):
         """
         Get the current config including all options and accessible fields
         :return:
         """
-        config_tree = self.camera.get_config()
+        config_tree = self._gp_get_camera_config_cached()
 
         def _traverse(node, depth=0):
             c_type = node.get_type()
@@ -270,10 +288,10 @@ if __name__ == "__main__":
         c.set_config(
             R6M2Config(
                 imgsettings=ImageSettings(iso="400"),
-                settings=Settings(capturetarget="Memory card"),
+                settings=Settings(capturetarget="Internal RAM"),
                 capturesettings=CaptureSettings(aperture="5.6", shutterspeed="2"),
             )
         )
-        for j in zip(range(200), c.stream_preview()):
+        for j in zip(range(20), c.stream_preview()):
 
             print(c.capture(keep_on_camera=True))
