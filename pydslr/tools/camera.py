@@ -10,7 +10,7 @@ import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Generic, Optional, Set, Tuple, TypeVar, get_args
+from typing import Generator, Generic, List, Optional, Set, Tuple, TypeVar, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
@@ -131,7 +131,45 @@ class Camera(Generic[T]):
                 yield self.preview_as_numpy()
 
     @timed
-    def highspeed_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False):
+    def bulb_capture(self, shutter_press_time: datetime.timedelta, path: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+        """
+        Keeps the shutter button pressed fully for the given time, taking just one image
+
+        :param shutter_press_time:
+        :param path:
+        :param keep_on_camera:
+        :return:
+        """
+        self.set_config(self.get_config().press_shutter())
+        time.sleep(shutter_press_time.total_seconds())
+        self.set_config(self.get_config().release_shutter())
+
+        _image = None
+        start_wait_at = datetime.datetime.now()
+        while (datetime.datetime.now() - start_wait_at).total_seconds() < 20:
+            evt = gp.gp_camera_wait_for_event(self.camera, 100)
+            if evt[1] == gp.GP_EVENT_FILE_ADDED:
+                _image = evt[2]
+            elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
+                break
+
+        if _image is None:
+            raise PyDSLRException("No capture event detected")
+
+        _, c_file = gp.gp_camera_file_get(self.camera, _image.folder, _image.name, gp.GP_FILE_TYPE_NORMAL)
+        c_path = Path(_image.name) if path is None else path
+        c_file.save(str(c_path))
+
+        exif_data = get_exif(c_path)
+        logging.info("Got picture with EXIF: %s in %s", exif_data, c_path)
+
+        if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
+            gp.gp_camera_file_delete(self.camera, _image.folder, _image.name)
+
+        return c_path
+
+    @timed
+    def highspeed_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
         """
         Keeps the shutter button pressed fully for the given time, downloading all captured images.
 
@@ -172,9 +210,11 @@ class Camera(Generic[T]):
             elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
                 break
 
+        paths = []
         for file in _backlog:
             _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
             c_path = folder / file.name
+            paths.append(c_path)
             c_file.save(str(c_path))
 
             exif_data = get_exif(c_path)
@@ -182,6 +222,8 @@ class Camera(Generic[T]):
 
             if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
                 gp.gp_camera_file_delete(self.camera, file.folder, file.name)
+
+        return paths
 
     def wait_for_event(self, event_id: int, timeout: int = 1000):
         """
