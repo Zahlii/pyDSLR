@@ -21,6 +21,21 @@ with Camera[R6M2Config]() as c:
         c.preview_to_file(Path('preview.jpg'))
 ```
 
+## Installation
+
+### MacOS (via Homebrew)
+
+```bash
+brew install pkg-config libgphoto2 exiftool
+pip install git+https://github.com/Zahlii/pyDSLR.git@main
+```
+
+### Linux / Ubuntu
+```bash
+apt-get install libgphoto2-6 exiftool
+pip install git+https://github.com/Zahlii/pyDSLR.git@main
+```
+
 ## Adding new camera config types
 
 - Connect your Camera via USB
@@ -28,7 +43,7 @@ with Camera[R6M2Config]() as c:
 - Open the result file, and rename the classes suffixed with `P_` to something reasonable
 - Open a pull request
 
-## Running all checks & tools
+## Contributing / Running all checks & tools
 
 ```bash
 poetry run isort .
