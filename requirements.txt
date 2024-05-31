@@ -6,3 +6,4 @@ fastapi
 black
 numpy
 pillow
+pyexiftool

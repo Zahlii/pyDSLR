@@ -1,12 +1,16 @@
 """
 Quick EXIF tools
 """
-
+import logging
 from pathlib import Path
 
-import exiftool  # type: ignore
+try:
+    import exiftool  # type: ignore
 
-e_tool = exiftool.ExifToolHelper()
+    e_tool = exiftool.ExifToolHelper()
+except (ModuleNotFoundError, FileNotFoundError) as exc:
+    logging.warning("ExifTool not found, not reporting any exif information.")
+    e_tool = None
 
 
 def get_exif(path: Path):
@@ -22,4 +26,7 @@ def get_exif(path: Path):
         "EXIF:ImageWidth",
         "EXIF:ImageHeight",
     ]
+
+    if e_tool is None:
+        return None
     return {k: e_tool.get_metadata([path])[0].get(k, None) for k in return_values}

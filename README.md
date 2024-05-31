@@ -36,6 +36,25 @@ apt-get install libgphoto2-6 exiftool
 pip install git+https://github.com/Zahlii/pyDSLR.git@main
 ```
 
+### Windows
+
+- Install [Zadig](https://zadig.akeo.ie/) 
+- Install [MYSYS2](https://www.msys2.org/) 
+- Install libgphoto2 for MINGW64: `pacman -S mingw-w64-x86_64-gphoto2`
+- Install pkg-config for MINGW64: `pacman -S mingw-w64-x86_64-pkg-config`
+- Install Python for MINGW64: `pacman -S mingw-w64-x86_64-python`
+- Install msgpack for MINGW64: `pacman -S mingw-w64-x86_64-python-msgpack`
+- Install rust (needed for some dependencies) for MINGW64: `pacman -S mingw-w64-x86_64-rust`
+- Install psutil for MINGW64: `pacman -S mingw-w64-x86_64-python-psutil`
+- Install Pillow for MINGW64: `pacman -S mingw-w64-x86_64-python-pillow`
+- Install ninja (needed for some dependencies) for MINGW64: `pacman -S mingw-w64-x86_64-ninja`
+- Install numpy for MINGW64: `pacman -S mingw-w64-x86_64-python-numpy`
+- Install Pydantic for MINGW64: `pacman -S mingw-w64-x86_64-python-pydantic`
+- Install using `SETUPTOOLS_USE_DISTUTILS=stdlib pip install -r requirements.txt`
+- Plug in your camera, start Zadig, make sure the "Interface 0" of your camera is set to WinUSB (see picture below)
+
+![win_setup.png](win_setup.png)
+
 ## Adding new camera config types
 
 - Connect your Camera via USB
