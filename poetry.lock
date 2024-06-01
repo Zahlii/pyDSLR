@@ -239,18 +239,27 @@ standard = ["fastapi", "uvicorn[standard] (>=0.15.0)"]
 
 [[package]]
 name = "gphoto2"
-version = "2.5.1"
+version = "2.5.0"
 description = "Python interface to libgphoto2"
 optional = false
 python-versions = "*"
-files = []
-develop = false
-
-[package.source]
-type = "git"
-url = "https://github.com/Zahlii/python-gphoto2"
-reference = "HEAD"
-resolved_reference = "eef21c6d4be01fd5e760276e215f6fbb619b2f3c"
+files = [
+    {file = "gphoto2-2.5.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:6dec159daa5dec0052eb2b2eac0286a8ff80f26f174f74b7ff43f3797258b3e4"},
+    {file = "gphoto2-2.5.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:81664e61fdee58210226d0f52d2a8956e2cc91b4722f7bc90a92c48d38501cbb"},
+    {file = "gphoto2-2.5.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:0dfc33aae70de5739796d73a8798f7d7fb81f7507756bbbedee305db2f8e5287"},
+    {file = "gphoto2-2.5.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7f0d7469d36948584cdf2647cd9b060d75d8ba15b87149a5df84951838dffcf6"},
+    {file = "gphoto2-2.5.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:b6bc25e43e38413344b5e9f5ca6f53fe4dd08f625c1c1265dd6d6b92489bdc9c"},
+    {file = "gphoto2-2.5.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bd2f9d80f2d967a9dd65d75476edb1dffa87efe9a38ed7d94b9f772174858f40"},
+    {file = "gphoto2-2.5.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:b4e993c86bcdb2027fe72f328ec569a3bbada3880da7d9f9a9eded5c6451fc88"},
+    {file = "gphoto2-2.5.0-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:216a65dc726e275fd910e18e278fe76037b61518edf697f850ab72e73b098fe2"},
+    {file = "gphoto2-2.5.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:9cf3c9c42170739b26aac6410c17ddaa5f9e2ef7d92dab1f77d10f7a62a939be"},
+    {file = "gphoto2-2.5.0-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5412b6488bc03926e7f57ebed2312ef3a70d7efc87f198efc30dcfcb028a7859"},
+    {file = "gphoto2-2.5.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:3777f13b4f8b819de8138ad1adccc5e97d5f0e23f7d6a822c79ca25dcc06b90d"},
+    {file = "gphoto2-2.5.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:27285fedb8b966db7c2891407dd992a06d5e50ec15d0ba3141bbb803eb9f930f"},
+    {file = "gphoto2-2.5.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:26fcb8328b26a554b79a27a8a648256208d9b83f19b2fe3809538b0c1f213483"},
+    {file = "gphoto2-2.5.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:14ab115930597f2394a7ec4815da0adec4bc1c7374e798b3c846b29cf7d00dd1"},
+    {file = "gphoto2-2.5.0.tar.gz", hash = "sha256:97d07a3c42067fcae4525600a4ecad5b6b3d3a181cc4c1d594381f411e599e80"},
+]
 
 [[package]]
 name = "h11"
@@ -1157,6 +1166,26 @@ files = [
 ]
 
 [[package]]
+name = "tqdm"
+version = "4.66.4"
+description = "Fast, Extensible Progress Meter"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "tqdm-4.66.4-py3-none-any.whl", hash = "sha256:b75ca56b413b030bc3f00af51fd2c1a1a5eac6a0c1cca83cbb37a5c52abce644"},
+    {file = "tqdm-4.66.4.tar.gz", hash = "sha256:e4d936c9de8727928f3be6079590e97d9abfe8d39a590be678eb5919ffc186bb"},
+]
+
+[package.dependencies]
+colorama = {version = "*", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+dev = ["pytest (>=6)", "pytest-cov", "pytest-timeout", "pytest-xdist"]
+notebook = ["ipywidgets (>=6)"]
+slack = ["slack-sdk"]
+telegram = ["requests"]
+
+[[package]]
 name = "typer"
 version = "0.12.3"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
@@ -1193,6 +1222,17 @@ python-versions = ">=3.8"
 files = [
     {file = "types-pytz-2024.1.0.20240417.tar.gz", hash = "sha256:6810c8a1f68f21fdf0f4f374a432487c77645a0ac0b31de4bf4690cf21ad3981"},
     {file = "types_pytz-2024.1.0.20240417-py3-none-any.whl", hash = "sha256:8335d443310e2db7b74e007414e74c4f53b67452c0cb0d228ca359ccfba59659"},
+]
+
+[[package]]
+name = "types-tqdm"
+version = "4.66.0.20240417"
+description = "Typing stubs for tqdm"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-tqdm-4.66.0.20240417.tar.gz", hash = "sha256:16dce9ef522ea8d40e4f5b8d84dd8a1166eefc13ceee7a7e158bf0f1a1421a31"},
+    {file = "types_tqdm-4.66.0.20240417-py3-none-any.whl", hash = "sha256:248aef1f9986b7b8c2c12b3cb4399fc17dba0a29e7e3f3f9cd704babb879383d"},
 ]
 
 [[package]]
@@ -1534,4 +1574,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9"
-content-hash = "c6efc1c3dc8a75b137fd71dfadda6ac76f1f03f5cb095cd40ae00f5851862500"
+content-hash = "323e9a47e0e5fa005ce5bd0a7cead0b29f1054538c05b9b6a0be82e90165d733"

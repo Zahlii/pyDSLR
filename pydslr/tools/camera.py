@@ -6,16 +6,16 @@ Main Camera class
 import datetime
 import io
 import logging
-import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Generic, List, Optional, Set, Tuple, TypeVar, get_args
+from typing import Generator, Generic, List, Optional, Set, TypeVar, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
 import psutil
 from PIL import Image
+from tqdm import trange
 
 from pydslr.config.base import BaseConfig
 from pydslr.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Settings
@@ -82,7 +82,7 @@ class Camera(Generic[T]):
     def preview_to_file(self, path: Optional[Path] = None):
         """
         Load the current preview/LiveView image as a file.
-        :param path:
+        :param path: target path, set to current working directory / preview.jpg per default.
         :return:
         """
         if path is not None:
@@ -135,9 +135,9 @@ class Camera(Generic[T]):
         """
         Keeps the shutter button pressed fully for the given time, taking just one image
 
-        :param shutter_press_time:
-        :param path:
-        :param keep_on_camera:
+        :param shutter_press_time: Time for the shutter to stay pressed
+        :param path: target path, set to current working directory / camera image name per default.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
         :return:
         """
         self.set_config(self.get_config().press_shutter())
@@ -173,10 +173,10 @@ class Camera(Generic[T]):
         """
         Keeps the shutter button pressed fully for the given time, downloading all captured images.
 
-        :param shutter_press_time:
-        :param folder:
-        :param keep_on_camera:
-        :return:
+        :param shutter_press_time: Time for the shutter to stay pressed
+        :param folder: Target folder, defaults to current working directory. Images will be named as on camera.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :return: All paths captured.
         """
 
         if folder is None:
@@ -225,23 +225,14 @@ class Camera(Generic[T]):
 
         return paths
 
-    def wait_for_event(self, event_id: int, timeout: int = 1000):
-        """
-        Wrapper around low-level event handler
-        :param event_id:
-        :param timeout:
-        :return:
-        """
-
-        raise PyDSLRException(f"No event {event_id} within timeout.")
-
     @timed
-    def capture(self, path: Optional[Path] = None, keep_on_camera: bool = False):
+    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
         """
         Capture a full image to disk.
-        :param keep_on_camera:
-        :param path:
-        :return:
+        :param folder: can be set instead of target path. If set, image will be put into this folder with the camera image name.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :param path: target path, set to current working directory / camera image name per default.
+        :return: The final path.
         """
         if path is not None:
             if self.get_config().is_raw():
@@ -251,28 +242,46 @@ class Camera(Generic[T]):
 
         _, file = gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE)
         if path is None:
-            path = Path(file.name)
+            if folder is None:
+                path = Path(file.name)
+            else:
+                path = folder / file.name
         _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
         c_file.save(str(path))
 
         if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
             gp.gp_camera_file_delete(self.camera, file.folder, file.name)
 
-        if os.stat(path).st_size == 0:
+        if path.stat().st_size == 0:
             path.unlink()
             raise PyDSLRException("Got zero-byte image during capture(). Make sure auto focus is possible.")
 
         exif_data = get_exif(path)
         logging.info("Got picture with EXIF: %s in %s", exif_data, path)
-        return exif_data
+        return path
 
-    def get_config(self) -> "T":
+    def focus_stack(self, n_images: int = 10, distance: int = 1, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
+        """
+        Perform focus stacking, from near to far.
+        :param distance: Focus step. See also :meth:`BaseConfig.focus_step`
+        :param n_images: Number of steps/images.
+        :param folder: Folder to save images to, defaults to current folder.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :return: All paths captured.
+        """
+        results = []
+        for _ in trange(n_images, desc="Performing focus stack"):
+            results.append(self.capture(path=folder, keep_on_camera=keep_on_camera))
+            self.set_config(self.get_config().focus_step(distance=distance), ignore_cache=True)
+        return results
+
+    def get_config(self, ignore_cache: bool = False) -> "T":
         """
         Get the current configuration of the camera.
         :return:
         """
 
-        response = self.get_json_config()
+        response = self.get_json_config(ignore_cache=ignore_cache)
 
         def _get_kwargs(node):
             if "children" not in node:
@@ -285,7 +294,7 @@ class Camera(Generic[T]):
     def config_context(self, new_config: T):
         """
         Context manager around settings to only shortly update settings.
-        :param new_config:
+        :param new_config: New config to be set temporarily
         :return:
         """
         old_config = self.get_config()
@@ -294,26 +303,30 @@ class Camera(Generic[T]):
         self.set_config(old_config, only_fields=changed_fields)
 
     @timed
-    def set_config(self, new_config: T, only_fields: Optional[Set[Tuple[str, str]]] = None) -> Set[Tuple[str, str]]:
+    def set_config(self, new_config: T, only_fields: Optional[Set[str]] = None, ignore_cache: bool = False) -> Set[str]:
         """
         Set the config, optionally limited to a set of named fields.
         Returns those fields that actually were modified.
 
-        :param new_config:
-        :param only_fields:
+        :param ignore_cache: Forces a new copy of the config to be created. Useful when issuing one-time actions, such as focus control.
+        :param new_config: New (partial) config to set.
+        :param only_fields: Exhaustive list of names of fields that should be set.
         :return:
         """
         updated_settings = set()
-        old_config = self.get_config()
-        gp_config = self._gp_get_camera_config_cached()
+        old_config = self.get_config(ignore_cache=ignore_cache)
+        gp_config = self._gp_get_camera_config_cached(ignore_cache=ignore_cache)
 
         for field in new_config.model_fields_set:
             if getattr(new_config, field, None) is not None:
                 for field2 in getattr(new_config, field).model_fields_set:
-                    if only_fields is not None and (field, field2) not in only_fields:
+                    if only_fields is not None and field2 not in only_fields:
+                        logging.debug("Skipping over %s.%s, as not in only_fields", field, field2)
                         continue
+
                     new_value = getattr(getattr(new_config, field), field2)
                     old_value = getattr(getattr(old_config, field), field2)
+                    update = True
                     if new_value != old_value and new_value is not None:
                         logging.info(
                             "Updating %s from %s -> %s",
@@ -321,29 +334,29 @@ class Camera(Generic[T]):
                             old_value,
                             new_value,
                         )
-                        updated_settings.add((field, field2))
+                        updated_settings.add(field2)
                         _, gp_field = gp.gp_widget_get_child_by_name(gp_config, field2)
-                        gp.gp_widget_set_value(gp_field, new_value)
+                        gp.check_result(gp.gp_widget_set_value(gp_field, new_value))
 
         if updated_settings:
             # this may throw I/O errors, but works
-            gp.gp_camera_set_config(self.camera, gp_config)
+            gp.check_result(gp.gp_camera_set_config(self.camera, gp_config))
             self._config = gp_config
 
         return updated_settings
 
     @timed
-    def _gp_get_camera_config_cached(self):
-        if self._config is None:
+    def _gp_get_camera_config_cached(self, ignore_cache: bool = False):
+        if self._config is None or ignore_cache:
             self._config = self.camera.get_config()
         return self._config
 
-    def get_json_config(self):
+    def get_json_config(self, ignore_cache: bool = False):
         """
         Get the current config including all options and accessible fields
         :return:
         """
-        config_tree = self._gp_get_camera_config_cached()
+        config_tree = self._gp_get_camera_config_cached(ignore_cache=ignore_cache)
 
         def _traverse(node, depth=0):
             c_type = node.get_type()

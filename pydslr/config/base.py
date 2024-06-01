@@ -58,3 +58,11 @@ class BaseConfig(BaseModel, ABC):
         Return the root folder to be used with gp_list_files to retrieve SD card contents
         :return:
         """
+
+    @abstractmethod
+    def focus_step(self, distance: int) -> Self:
+        """
+        Perform a focus step
+        :param distance: Distance. Depending on your camera, this will handled differently.
+        :return:
+        """

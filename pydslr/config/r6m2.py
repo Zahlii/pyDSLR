@@ -379,7 +379,7 @@ class CaptureSettings(BaseModel):
             "3",
         ]
     ] = None
-    focusmode: Optional[Literal["One Shot", "AI Servo", "AI Focus"]] = None
+    focusmode: Optional[Literal["One Shot", "AI Servo", "AI Focus", "Manual"]] = None
     continuousaf: Optional[Literal["Off", "On"]] = None
     aspectratio: Optional[Literal["3:2", "1:1", "4:3", "16:9", "1.6x"]] = None
     afmethod: Optional[
@@ -580,6 +580,18 @@ class R6M2Config(BaseConfig):
         if copied.actions is None:
             copied.actions = ActionSettings()
         copied.actions.eosremoterelease = "Press Full"
+        return copied
+
+    def focus_step(self, distance: int) -> Self:
+        copied = self.model_copy(deep=True)
+        if copied.actions is None:
+            copied.actions = ActionSettings()
+        if distance == 1:
+            copied.actions.manualfocusdrive = "Far 1"
+        elif distance == 2:
+            copied.actions.manualfocusdrive = "Far 2"
+        else:
+            copied.actions.manualfocusdrive = "Far 3"
         return copied
 
     def release_shutter(self) -> Self:

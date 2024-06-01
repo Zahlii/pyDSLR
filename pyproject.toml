@@ -6,22 +6,25 @@ authors = ["Niklas Frühauf <niklas.fruehauf@sovanta.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.9"
-gphoto2 = "*"
-pytz= "*"
-psutil= "*"
-pydantic= "*"
-fastapi= "*"
-black= "*"
-numpy= "*"
-pillow= "*"
+tqdm = "^4.66.4"
+gphoto2 = "^2.5.0"
+pytz = "^2024.1"
+psutil = "^5.9.8"
+pydantic = "^2.7.2"
+fastapi = "^0.111.0"
+black = "^24.4.2"
+numpy = "^1.26.4"
+pillow = "^10.3.0"
 
-[tool.poetry.dev-dependencies]
-pylint= "*"
-mypy= "*"
-types-psutil= "*"
-types-pytz= "*"
-black = "*"
-isort = "*"
+
+[tool.poetry.group.dev.dependencies]
+types-tqdm = "^4.66.0.20240417"
+pylint = "^3.2.2"
+mypy = "^1.10.0"
+types-psutil = "^5.9.5.20240516"
+types-pytz = "^2024.1.0.20240417"
+black = "^24.4.2"
+isort = "^5.13.2"
 
 [tool.pylint]
 max-line-length = 150

@@ -1,6 +1,7 @@
 """
 Quick EXIF tools
 """
+
 import logging
 from pathlib import Path
 
