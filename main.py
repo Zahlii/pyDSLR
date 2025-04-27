@@ -47,7 +47,7 @@ async def lifespan(_):
     global camera
     # with Camera[R6M2Config]() as c:
     #     with c.config_context(R6M2Config(imgsettings=ImageSettings(imageformat="Medium Fine JPEG"))):
-    #         camera = c
+    #         camera = OverlayCaptureDevice(c, overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png")
     #         yield
     with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png") as c:
         camera = c

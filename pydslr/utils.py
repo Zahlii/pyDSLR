@@ -12,7 +12,7 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG, handlers=[logging.StreamHandler(stream=sys.stderr)])
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO, handlers=[logging.StreamHandler(stream=sys.stderr)])
 
 if TYPE_CHECKING:
     from pydslr.tools.camera import Camera
@@ -30,7 +30,7 @@ def timed(f):
         ts = time.perf_counter()
         result = f(*args, **kw)
         te = time.perf_counter()
-        logging.info("%s took: %2.4f sec", f.__name__, te - ts)
+        logging.debug("%s took: %2.4f sec", f.__name__, te - ts)
         return result
 
     return wrap

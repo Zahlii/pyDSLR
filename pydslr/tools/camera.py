@@ -203,15 +203,17 @@ class OverlayCaptureDevice(CaptureDevice[T]):
     A capture device that applies an overlay image on top of another capture device's output.
     """
 
-    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path]):
+    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path], mirror_image: bool = True):
         """
         Initialize an overlay capture device
 
         :param inner_device: The base capture device to wrap
         :param overlay_path: Path to the overlay image (PNG with transparency recommended)
+        :param mirror_image: If True, mirror the base image left/right before applying overlay
         """
         self._inner_device = inner_device
         self.overlay_path = Path(overlay_path)
+        self.mirror_image = mirror_image
         if not self.overlay_path.exists():
             raise PyDSLRException(f"Overlay image not found at {self.overlay_path}")
 
@@ -234,6 +236,10 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         """
         # Handle other formats
         base_image = Image.fromarray(image).convert("RGBA")
+
+        # Mirror the image if requested
+        if self.mirror_image:
+            base_image = base_image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
         # Resize overlay to match base image if needed
         if self._overlay_image.size != base_image.size:
