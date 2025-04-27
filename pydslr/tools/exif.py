@@ -5,6 +5,8 @@ Quick EXIF tools
 import logging
 from pathlib import Path
 
+from pydantic import BaseModel
+
 try:
     import exiftool  # type: ignore
 
@@ -14,20 +16,32 @@ except (ModuleNotFoundError, FileNotFoundError) as exc:
     e_tool = None
 
 
-def get_exif(path: Path):
+class ExifInfo(BaseModel):
+    iso: int | None = None
+    fstop: str | None = None
+    exposure_time: str | None = None
+    width: int
+    height: int
+
+
+def get_exif(path: Path) -> ExifInfo | None:
     """
     Return the key EXIF infos for a freshly taken picture
     :param path:
     :return:
     """
-    return_values = [
-        "EXIF:ISO",
-        "EXIF:FNumber",
-        "EXIF:ExposureTime",
-        "EXIF:ImageWidth",
-        "EXIF:ImageHeight",
-    ]
-
     if e_tool is None:
         return None
-    return {k: e_tool.get_metadata([path])[0].get(k, None) for k in return_values}
+
+    meta = e_tool.get_metadata([path])[0]
+
+    def get_field(k: str):
+        return meta.get(k, None)
+
+    return ExifInfo(
+        iso=get_field("EXIF:ISO"),
+        fstop=get_field("EXIF:FNumber"),
+        exposure_time=get_field("EXIF:ExposureTime"),
+        width=get_field("File:ImageWidth"),
+        height=get_field("File:ImageHeight"),
+    )

@@ -175,6 +175,7 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
         if not success:
             raise PyDSLRException(f"Failed to save image to {path}")
 
+        logging.info("Got picture with EXIF: %s in %s", get_exif(path), path)
         return path
 
 
@@ -265,8 +266,7 @@ class Camera(CaptureDevice[T]):
         c_path = Path(_image.name) if path is None else path
         c_file.save(str(c_path))
 
-        exif_data = get_exif(c_path)
-        logging.info("Got picture with EXIF: %s in %s", exif_data, c_path)
+        logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
 
         if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
             gp.gp_camera_file_delete(self.camera, _image.folder, _image.name)
@@ -322,8 +322,7 @@ class Camera(CaptureDevice[T]):
             paths.append(c_path)
             c_file.save(str(c_path))
 
-            exif_data = get_exif(c_path)
-            logging.info("Got picture with EXIF: %s in %s", exif_data, c_path)
+            logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
 
             if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
                 gp.gp_camera_file_delete(self.camera, file.folder, file.name)
@@ -361,8 +360,7 @@ class Camera(CaptureDevice[T]):
             path.unlink()
             raise PyDSLRException("Got zero-byte image during capture(). Make sure auto focus is possible.")
 
-        exif_data = get_exif(path)
-        logging.info("Got picture with EXIF: %s in %s", exif_data, path)
+        logging.info("Got picture with EXIF: %s in %s", get_exif(path), path)
         return path
 
     def focus_stack(self, n_images: int = 10, distance: int = 1, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
