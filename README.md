@@ -70,3 +70,7 @@ poetry run black .
 poetry run pylint **/*.py
 poetry run mypy . --explicit-package-bases
 ```
+
+## Photo Booth Helpers & REST Service
+
+In `main.py` you also find a basic REST interface that allows you to build basic photo booth applications, also providing a fallback option to use OpenCV + Webcams instead of a gphoto2 compatible attached camera for easier testing. It includes printing helpers, a live stream feature, and an interface to capture and save snapshots.

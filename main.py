@@ -71,7 +71,7 @@ def config():
 
 
 @app.get("/snapshot")
-def snapshot():
+def create_snapshot():
     """
     Take and save a snapshot with current settings
 
@@ -86,6 +86,16 @@ def snapshot():
     return SnapshotResponse(
         image_path=str(result_path.relative_to(img_path)), exif=get_exif(result_path), image_b64=f"data:image/jpeg;base64,{encoded_image}"
     )
+
+
+@app.delete("/snapshot")
+def delete_snapshot(snapshot_name: str):
+    full_path = img_path / snapshot_name
+    assert full_path.exists(), f"Image {full_path} does not exist"
+    assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
+
+    full_path.unlink()
+    return True
 
 
 @app.post("/print")
