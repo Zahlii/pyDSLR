@@ -8,8 +8,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pydslr.config.r6m2 import ImageSettings, R6M2Config
@@ -54,10 +55,11 @@ async def lifespan(_):
         yield
 
 
+backend_router = FastAPI()
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/stream")
+@backend_router.get("/stream")
 def stream():
     """
     Display a live stream from the camera
@@ -66,7 +68,7 @@ def stream():
     return StreamingResponse(camera.stream_preview(max_fps=30), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
-@app.get("/config")
+@backend_router.get("/config")
 def config():
     """
 
@@ -75,7 +77,7 @@ def config():
     return camera.get_config()
 
 
-@app.get("/snapshot")
+@backend_router.get("/snapshot")
 def create_snapshot():
     """
     Take and save a snapshot with current settings
@@ -93,7 +95,7 @@ def create_snapshot():
     )
 
 
-@app.delete("/snapshot")
+@backend_router.delete("/snapshot")
 def delete_snapshot(snapshot_name: str):
     full_path = img_path / snapshot_name
     assert full_path.exists(), f"Image {full_path} does not exist"
@@ -103,7 +105,7 @@ def delete_snapshot(snapshot_name: str):
     return True
 
 
-@app.post("/print")
+@backend_router.post("/print")
 def do_print(print_request: PrintRequest):
     full_path = img_path / print_request.image_path
     assert full_path.exists(), f"Image {full_path} does not exist"
@@ -113,6 +115,11 @@ def do_print(print_request: PrintRequest):
         image_path=full_path, copies=print_request.copies, printer_name=print_request.printer_name, landscape=print_request.landscape
     )
 
+
+app.mount("/api", backend_router)
+
+ui_path = Path(__file__).parent / "booth-ui"
+app.mount("/", StaticFiles(directory=ui_path / "dist" / "photo-booth-ui" / "browser", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
