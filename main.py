@@ -5,11 +5,13 @@ REST Server to communicate with Camera
 import base64
 import logging
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, FastAPI
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -57,6 +59,13 @@ async def lifespan(_):
 
 backend_router = FastAPI()
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @backend_router.get("/stream")
@@ -65,7 +74,7 @@ def stream():
     Display a live stream from the camera
     :return:
     """
-    return StreamingResponse(camera.stream_preview(max_fps=30), media_type="multipart/x-mixed-replace;boundary=frame")
+    return StreamingResponse(camera.stream_preview(max_fps=30, max_time=timedelta(seconds=15)), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
 @backend_router.get("/config")
@@ -101,6 +110,9 @@ def delete_snapshot(snapshot_name: str):
     assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
 
+    raw_path = full_path.with_name(full_path.name.replace("_overlay", ""))
+    if raw_path.exists():
+        raw_path.unlink()
     full_path.unlink()
     return True
 

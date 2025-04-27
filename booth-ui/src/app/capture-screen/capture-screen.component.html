@@ -1,0 +1,23 @@
+<div class="container">
+  <h1>Click below to start the countdown & capture</h1>
+  <div id="overlay-container">
+    @if (!activeSnapshot()) {
+      <img [src]="activeStream()" alt="Live Preview" />
+      @if (countDownActive()) {
+        <div id="overlay">{{ countDownRemaining() }}</div>
+      }
+    } @else {
+      <img [src]="activeSnapshot()?.image_b64" alt="Taken Picture" />
+    }
+  </div>
+  <div class="flex">
+    @if (!activeSnapshot()) {
+      <button mat-flat-button (click)="startCountDown()">Start!</button>
+    } @else {
+      <button mat-stroked-button (click)="deleteSnapshot()">Re-Try</button>
+      <button mat-flat-button (click)="saveAndPrintSnapshot()">
+        Save & Print
+      </button>
+    }
+  </div>
+</div>
