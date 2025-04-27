@@ -12,7 +12,8 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from pydslr.tools.camera import CaptureDevice, OpenCVCaptureDevice
+from pydslr.config.r6m2 import ImageSettings, R6M2Config
+from pydslr.tools.camera import Camera, CaptureDevice, OpenCVCaptureDevice
 from pydslr.tools.exif import ExifInfo, get_exif
 from pydslr.tools.printer import PrinterService
 
@@ -44,9 +45,13 @@ async def lifespan(_):
     """
     # pylint: disable=global-statement
     global camera
-    with OpenCVCaptureDevice() as c:
-        camera = c
-        yield
+    with Camera[R6M2Config]() as c:
+        with c.config_context(R6M2Config(imgsettings=ImageSettings(imageformat="Medium Fine JPEG"))):
+            camera = c
+            yield
+    # with OpenCVCaptureDevice() as c:
+    #     camera = c
+    #     yield
 
 
 app = FastAPI(lifespan=lifespan)
