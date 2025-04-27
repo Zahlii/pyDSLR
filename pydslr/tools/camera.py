@@ -272,10 +272,19 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         # Apply overlay
         result_image = self._apply_overlay(base_image)
 
-        # Save the result back to the same path
-        Image.fromarray(result_image).save(original_path)
+        # Create a path for the overlay version
+        stem = original_path.stem
+        suffix = original_path.suffix
+        overlay_path = original_path.with_name(f"{stem}_overlay{suffix}")
 
-        return original_path
+        # Save the overlay version with high quality to maintain similar file size to original
+        if suffix.lower() in (".jpg", ".jpeg"):
+            Image.fromarray(result_image).save(overlay_path, format="JPEG", quality=95, optimize=True)
+        else:
+            Image.fromarray(result_image).save(overlay_path)
+
+        # Return the overlay path
+        return overlay_path
 
 
 class Camera(CaptureDevice[T]):
