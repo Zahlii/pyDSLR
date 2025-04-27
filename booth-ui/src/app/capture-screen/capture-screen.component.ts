@@ -91,6 +91,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   async deleteSnapshot() {
     this.resetInactivityTimer();
+    this.activeStream.set(STREAM);
     this.cs.deleteSnapshot(this.activeSnapshot()!.image_path).subscribe((_) => {
       this.activeSnapshot.set(undefined);
       this.startCountDown();
