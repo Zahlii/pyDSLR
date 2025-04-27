@@ -25,7 +25,7 @@ class ExifInfo(BaseModel):
     height: int
 
 
-def get_exif(path: Path) -> ExifInfo | None:
+def get_exif(path: Path | str) -> ExifInfo | None:
     """
     Return the key EXIF infos for a freshly taken picture
     :param path:

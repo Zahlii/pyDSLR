@@ -46,7 +46,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   private startInactivityTimer() {
     this.clearInactivityTimer();
     this.inactivityTimer = interval(1000).subscribe(async (i) => {
-      if (i >= RETURN_AFTER) {
+      if (i >= RETURN_AFTER && !this.activeSnapshot()) {
         this.clearInactivityTimer();
         this.activeStream.set(undefined);
         this.activeSnapshot.set(undefined);

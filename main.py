@@ -49,7 +49,7 @@ async def lifespan(_):
     # pylint: disable=global-statement
     global camera
     # with Camera[R6M2Config]() as c:
-    #     with c.config_context(R6M2Config(imgsettings=ImageSettings(imageformat="Medium Fine JPEG"))):
+    #     with c.config_context(R6M2Config(imgsettings=ImageSettings(imageformat="Large Fine JPEG"))):
     #         camera = OverlayCaptureDevice(c, overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png")
     #         yield
     with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png") as c:
