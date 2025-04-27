@@ -7,6 +7,7 @@ import datetime
 import io
 import logging
 import time
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Generic, List, Optional, Set, TypeVar, get_args
@@ -22,76 +23,31 @@ from pydslr.config.r6m2 import CaptureSettings, ImageSettings, R6M2Config, Setti
 from pydslr.tools.exif import get_exif
 from pydslr.utils import GPWidgetItem, PyDSLRException, timed
 
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
-
 T = TypeVar("T", bound=BaseConfig)
 
 
-class Camera(Generic[T]):
-    """
-    Generic wrapper around gphoto2 to allow python access to your camera config and capture modes
-    """
-
-    def __init__(self):
-        self._maybe_kill_ptp()
-        # pylint: disable=not-callable
-        self.camera = gp.Camera()
-        self._config = None
-
-    def __enter__(self):
-        self.camera.init()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        gp.gp_camera_exit(self.camera)
-
-    @staticmethod
-    def _maybe_kill_ptp():
+class CaptureDevice(ABC, Generic[T]):
+    @abstractmethod
+    def preview_as_numpy(self) -> np.ndarray:
         """
-        Make sure device not claimed by ptpcamerad on macOS, otherwise we get errors running as non-root
+        Load the current preview/LiveView image as numpy array via Image.open()
         :return:
         """
-        for proc in psutil.process_iter():
-            name = proc.name()
-            if "ptpcamerad" in name:
-                logging.info("Found ptpcamerad as PID %s, killing...", proc.pid)
-                proc.kill()
 
-    @timed
+    @abstractmethod
     def preview_as_bytes(self) -> bytes:
         """
         Load the current preview/LiveView image as byte array in JPEG format. If settings were recently updated,
         this may not yet fully reflect it, as the camera usually keeps the preview buffered.
         :return:
         """
-        _, file = gp.gp_camera_capture_preview(self.camera)
-        data = bytearray(gp.gp_file_get_data_and_size(file)[1])
-        return data
 
-    def preview_as_numpy(self) -> np.ndarray:
+    @abstractmethod
+    def get_config(self, ignore_cache: bool = False) -> Optional["T"]:
         """
-        Load the current preview/LiveView image as numpy array via Image.open()
+        Get the current configuration of the device.
         :return:
         """
-        with io.BytesIO() as buffer:
-            buffer.write(self.preview_as_bytes())
-            buffer.seek(0)
-            return np.asarray(Image.open(buffer))
-
-    @timed
-    def preview_to_file(self, path: Optional[Path] = None):
-        """
-        Load the current preview/LiveView image as a file.
-        :param path: target path, set to current working directory / preview.jpg per default.
-        :return:
-        """
-        if path is not None:
-            assert ".jpg" in path.suffixes or ".jpeg" in path.suffixes, "Capture Preview should be stores as JPG."
-        else:
-            path = Path("preview.jpg")
-        data = self.preview_as_bytes()
-        with path.open("wb") as fp:
-            fp.write(data)
 
     def stream_preview(
         self,
@@ -129,6 +85,155 @@ class Camera(Generic[T]):
                 yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + self.preview_as_bytes() + b"\r\n"
             else:
                 yield self.preview_as_numpy()
+
+    @abstractmethod
+    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+        """
+        Capture a full image to disk.
+        :param folder: can be set instead of target path. If set, image will be put into this folder with the camera image name.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :param path: target path, set to current working directory / camera image name per default.
+        :return: The final path.
+        """
+
+
+class OpenCVCaptureDevice(CaptureDevice[T]):
+    def get_config(self, ignore_cache: bool = False) -> Optional["T"]:
+        return None
+
+    def __init__(self, camera_index: int = 0):
+        """
+        Initialize a webcam capture device
+
+        :param camera_index: Index of the camera to use (default 0 for primary webcam)
+        """
+        self.camera_index = camera_index
+        self._cap = None
+        self._initialize_capture()
+
+    def _initialize_capture(self):
+        import cv2
+
+        self._cap = cv2.VideoCapture(self.camera_index)
+        if not self._cap.isOpened():
+            raise PyDSLRException(f"Failed to open webcam at index {self.camera_index}")
+
+    def __enter__(self):
+        if not self._cap or not self._cap.isOpened():
+            self._initialize_capture()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        if self._cap and self._cap.isOpened():
+            self._cap.release()
+            self._cap = None
+
+    def preview_as_numpy(self) -> np.ndarray:
+        if not self._cap or not self._cap.isOpened():
+            self._initialize_capture()
+
+        assert self._cap is not None
+        ret, frame = self._cap.read()
+        if not ret:
+            raise PyDSLRException("Failed to read frame from webcam")
+
+        return frame
+
+    def preview_as_bytes(self) -> bytes:
+        import cv2
+
+        frame = self.preview_as_numpy()
+        success, buffer = cv2.imencode(".jpg", frame)
+        if not success:
+            raise PyDSLRException("Failed to encode frame as JPEG")
+
+        return buffer.tobytes()
+
+    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+        frame = self.preview_as_numpy()
+
+        # Generate filename with timestamp if not provided
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"webcam_{timestamp}.jpg"
+
+        if path is None:
+            if folder is None:
+                path = Path(filename)
+            else:
+                path = folder / filename
+
+        # Make sure parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        import cv2
+
+        # Write the image to disk
+        success = cv2.imwrite(str(path), frame)
+        if not success:
+            raise PyDSLRException(f"Failed to save image to {path}")
+
+        return path
+
+
+class Camera(CaptureDevice[T]):
+    """
+    Generic wrapper around gphoto2 to allow python access to your camera config and capture modes
+    """
+
+    def __init__(self):
+        self._maybe_kill_ptp()
+        # pylint: disable=not-callable
+        self.camera = gp.Camera()
+        self._config = None
+
+    def __enter__(self):
+        self.camera.init()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        gp.gp_camera_exit(self.camera)
+
+    @staticmethod
+    def _maybe_kill_ptp():
+        """
+        Make sure device not claimed by ptpcamerad on macOS, otherwise we get errors running as non-root
+        :return:
+        """
+        for proc in psutil.process_iter():
+            name = proc.name()
+            if "ptpcamerad" in name:
+                logging.info("Found ptpcamerad as PID %s, killing...", proc.pid)
+                proc.kill()
+
+    @timed
+    def preview_as_bytes(self) -> bytes:
+        _, file = gp.gp_camera_capture_preview(self.camera)
+        data = bytearray(gp.gp_file_get_data_and_size(file)[1])
+        return data
+
+    def preview_as_numpy(self) -> np.ndarray:
+        with io.BytesIO() as buffer:
+            buffer.write(self.preview_as_bytes())
+            buffer.seek(0)
+            return np.asarray(Image.open(buffer))
+
+    @timed
+    def preview_to_file(self, path: Optional[Path] = None):
+        """
+        Load the current preview/LiveView image as a file.
+        :param path: target path, set to current working directory / preview.jpg per default.
+        :return:
+        """
+        if path is not None:
+            assert ".jpg" in path.suffixes or ".jpeg" in path.suffixes, "Capture Preview should be stores as JPG."
+        else:
+            path = Path("preview.jpg")
+        data = self.preview_as_bytes()
+        with path.open("wb") as fp:
+            fp.write(data)
 
     @timed
     def bulb_capture(self, shutter_press_time: datetime.timedelta, path: Optional[Path] = None, keep_on_camera: bool = False) -> Path:

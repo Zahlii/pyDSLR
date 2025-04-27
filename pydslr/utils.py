@@ -6,10 +6,13 @@ import enum
 import logging
 import os
 import string
+import sys
 import time
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG, handlers=[logging.StreamHandler(stream=sys.stderr)])
 
 if TYPE_CHECKING:
     from pydslr.tools.camera import Camera

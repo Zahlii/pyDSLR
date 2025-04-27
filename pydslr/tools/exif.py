@@ -10,7 +10,7 @@ try:
 
     e_tool = exiftool.ExifToolHelper()
 except (ModuleNotFoundError, FileNotFoundError) as exc:
-    logging.warning("ExifTool not found, not reporting any exif information.")
+    logging.warning("ExifTool not found, not reporting any exif information: %s", exc)
     e_tool = None
 
 

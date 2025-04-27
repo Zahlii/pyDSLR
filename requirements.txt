@@ -1,9 +1,0 @@
-gphoto2
-pytz
-psutil
-pydantic
-fastapi
-black
-numpy
-pillow
-pyexiftool
