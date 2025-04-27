@@ -10,7 +10,7 @@ import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Generic, List, Optional, Set, TypeVar, get_args
+from typing import Generator, Generic, List, Optional, Set, TypeVar, Union, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
@@ -48,6 +48,12 @@ class CaptureDevice(ABC, Generic[T]):
         Get the current configuration of the device.
         :return:
         """
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return
 
     def stream_preview(
         self,
@@ -135,24 +141,34 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
         if not self._cap or not self._cap.isOpened():
             self._initialize_capture()
 
+        import cv2
+
         assert self._cap is not None
         ret, frame = self._cap.read()
         if not ret:
             raise PyDSLRException("Failed to read frame from webcam")
 
-        return frame
+        # Convert BGR to RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        return rgb_frame
 
     def preview_as_bytes(self) -> bytes:
         import cv2
 
-        frame = self.preview_as_numpy()
-        success, buffer = cv2.imencode(".jpg", frame)
+        # Get RGB frame from preview_as_numpy
+        rgb_frame = self.preview_as_numpy()
+
+        # Convert RGB back to BGR for cv2.imencode which expects BGR
+        bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
+
+        success, buffer = cv2.imencode(".jpg", bgr_frame)
         if not success:
             raise PyDSLRException("Failed to encode frame as JPEG")
 
         return buffer.tobytes()
 
     def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+        # Get frame in RGB format
         frame = self.preview_as_numpy()
 
         # Generate filename with timestamp if not provided
@@ -170,13 +186,96 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
 
         import cv2
 
+        # Convert RGB to BGR for cv2.imwrite which expects BGR
+        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
         # Write the image to disk
-        success = cv2.imwrite(str(path), frame)
+        success = cv2.imwrite(str(path), bgr_frame)
         if not success:
             raise PyDSLRException(f"Failed to save image to {path}")
 
         logging.info("Got picture with EXIF: %s in %s", get_exif(path), path)
         return path
+
+
+class OverlayCaptureDevice(CaptureDevice[T]):
+    """
+    A capture device that applies an overlay image on top of another capture device's output.
+    """
+
+    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path]):
+        """
+        Initialize an overlay capture device
+
+        :param inner_device: The base capture device to wrap
+        :param overlay_path: Path to the overlay image (PNG with transparency recommended)
+        """
+        self._inner_device = inner_device
+        self.overlay_path = Path(overlay_path)
+        if not self.overlay_path.exists():
+            raise PyDSLRException(f"Overlay image not found at {self.overlay_path}")
+
+        # Load the overlay image
+        self._overlay_image = Image.open(self.overlay_path).convert("RGBA")
+
+    def __enter__(self):
+        self._inner_device.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._inner_device.__exit__(exc_type, exc_val, exc_tb)
+
+    def _apply_overlay(self, image: np.ndarray) -> np.ndarray:
+        """
+        Apply the overlay to a numpy array image
+
+        :param image: Base image as numpy array
+        :return: Image with overlay applied
+        """
+        # Handle other formats
+        base_image = Image.fromarray(image).convert("RGBA")
+
+        # Resize overlay to match base image if needed
+        if self._overlay_image.size != base_image.size:
+            overlay_resized = self._overlay_image.resize(base_image.size, Image.Resampling.LANCZOS)
+        else:
+            overlay_resized = self._overlay_image
+
+        # Composite the images
+        result = Image.alpha_composite(base_image.convert("RGBA"), overlay_resized).convert("RGB")
+
+        return np.array(result)
+
+    def preview_as_numpy(self) -> np.ndarray:
+        base_image = self._inner_device.preview_as_numpy()
+        return self._apply_overlay(base_image)
+
+    def preview_as_bytes(self) -> bytes:
+        overlay_array = self.preview_as_numpy()
+
+        # Convert to bytes
+        buffer = io.BytesIO()
+        Image.fromarray(overlay_array).save(buffer, format="JPEG")
+        return buffer.getvalue()
+
+    def get_config(self, ignore_cache: bool = False) -> Optional["T"]:
+        return self._inner_device.get_config(ignore_cache=ignore_cache)
+
+    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+        # Get original capture from inner device
+        original_path = self._inner_device.capture(path=path, folder=folder, keep_on_camera=keep_on_camera)
+
+        # Read the captured image
+        with Image.open(original_path) as img:
+            base_image = np.array(img)
+
+        # Apply overlay
+        result_image = self._apply_overlay(base_image)
+
+        # Save the result back to the same path
+        Image.fromarray(result_image).save(original_path)
+
+        return original_path
 
 
 class Camera(CaptureDevice[T]):
@@ -511,5 +610,4 @@ if __name__ == "__main__":
             )
         )
         for j in zip(range(20), c.stream_preview()):
-
             print(c.capture(keep_on_camera=True))
