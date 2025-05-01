@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { CONFIG } from './config';
 
 /**
  * Interface representing a print request
@@ -30,8 +31,6 @@ export interface SnapshotResponse {
   providedIn: 'root',
 })
 export class CaptureService {
-  private apiUrl = 'http://localhost:8000/api';
-
   constructor(private http: HttpClient) {}
 
   /**
@@ -39,7 +38,7 @@ export class CaptureService {
    * @returns An Observable with the snapshot data including image path, base64 image, and EXIF data
    */
   captureSnapshot(): Observable<SnapshotResponse> {
-    return this.http.get<SnapshotResponse>(`${this.apiUrl}/snapshot`);
+    return this.http.get<SnapshotResponse>(`${CONFIG.BACKEND_URL}/snapshot`);
   }
 
   /**
@@ -48,7 +47,7 @@ export class CaptureService {
    * @returns An Observable that resolves to true if deletion was successful
    */
   deleteSnapshot(snapshotName: string): Observable<boolean> {
-    return this.http.delete<boolean>(`${this.apiUrl}/snapshot`, {
+    return this.http.delete<boolean>(`${CONFIG.BACKEND_URL}/snapshot`, {
       params: { snapshot_name: snapshotName },
     });
   }
@@ -59,6 +58,6 @@ export class CaptureService {
    * @returns An Observable that resolves to true if printing was successful
    */
   printSnapshot(printRequest: PrintRequest): Observable<boolean> {
-    return this.http.post<boolean>(`${this.apiUrl}/print`, printRequest);
+    return this.http.post<boolean>(`${CONFIG.BACKEND_URL}/print`, printRequest);
   }
 }

@@ -8,7 +8,7 @@
           <div id="overlay">{{ countDownRemaining() }}</div>
         }
       } @else {
-        <img src="http://localhost:8000/api/last" alt="Last Preview" />
+        <img src="{{ CONFIG.BACKEND_LAST_URL }}" alt="Last Preview" />
         <div id="overlay">Capture in progress!</div>
       }
     } @else {
@@ -20,11 +20,11 @@
       @if (!activeSnapshot()) {
         <button mat-flat-button (click)="startCountDown()">Start!</button>
       } @else {
-        <button mat-stroked-button (click)="cancel()">Back to Start</button>
-        <button mat-stroked-button (click)="deleteSnapshot()">Re-Try</button>
-        <button mat-flat-button (click)="saveAndPrintSnapshot()">
-          Save & Print
+        <button mat-stroked-button (click)="deleteAndLeave()">
+          Back to Start
         </button>
+        <button mat-stroked-button (click)="deleteAndRetry()">Re-Try</button>
+        <button mat-flat-button (click)="saveAndPrint()">Save & Print</button>
       }
     }
   </div>

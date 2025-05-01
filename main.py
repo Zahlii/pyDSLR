@@ -123,13 +123,13 @@ def create_snapshot():
 @backend_router.delete("/snapshot")
 def delete_snapshot(snapshot_name: str):
     full_path = img_path / snapshot_name
-    assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
 
     raw_path = full_path.with_name(full_path.name.replace("_overlay", ""))
     if raw_path.exists():
         raw_path.unlink()
-    full_path.unlink()
+    if full_path.exists():
+        full_path.unlink()
     return True
 
 

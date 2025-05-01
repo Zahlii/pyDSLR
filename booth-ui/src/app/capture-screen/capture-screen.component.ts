@@ -3,16 +3,14 @@ import {
   OnDestroy,
   OnInit,
   signal,
+  ViewChild,
   WritableSignal,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
-import {interval, Subscription, timer} from 'rxjs';
+import { firstValueFrom, interval, Subscription, timer } from 'rxjs';
 import { CaptureService, SnapshotResponse } from '../capture.service';
-
-const COUNTDOWN = 3;
-const RETURN_AFTER = 10;
-const STREAM = 'http://localhost:8000/api/stream';
+import { CONFIG } from '../config';
 
 @Component({
   selector: 'app-capture-screen',
@@ -23,11 +21,13 @@ const STREAM = 'http://localhost:8000/api/stream';
 export class CaptureScreenComponent implements OnInit, OnDestroy {
   countDownActive = signal(false);
   captureActive = signal(false);
-  countDownRemaining = signal(COUNTDOWN);
-  activeStream: WritableSignal<string | undefined> = signal(STREAM);
+  countDownRemaining = signal(CONFIG.COUNTDOWN_CAPTURE_SECONDS);
 
   activeSnapshot: WritableSignal<SnapshotResponse | undefined> =
     signal(undefined);
+  activeStream: WritableSignal<string | undefined> = signal(
+    CONFIG.BACKEND_STREAM_URL,
+  );
 
   private inactivityTimer: Subscription | null = null;
 
@@ -48,26 +48,34 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   private startInactivityTimer() {
     this.clearInactivityTimer();
     this.inactivityTimer = interval(1000).subscribe(async (i) => {
-      if (i >= RETURN_AFTER && !this.activeSnapshot()) {
+      if (i >= CONFIG.INACTIVITY_RETURN_SECONDS && !this.activeSnapshot()) {
         this.clearInactivityTimer();
-        this.activeStream.set(undefined);
-        this.activeSnapshot.set(undefined);
-        this.countDownActive.set(false);
-        this.captureActive.set(false);
-        // wait until changes are propagated, i.e. image source is really set
-        const sub = timer(100).subscribe(async (_) => {
-          await this.router.navigate(['']);
-          sub.unsubscribe();
-        });
+        await this.leave();
       }
     });
   }
 
-  private reset() {
-    this.activeStream.set(STREAM);
+  private async cancelStream() {
+    this.activeStream.set(undefined);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+
+  private async reset() {
     this.activeSnapshot.set(undefined);
     this.countDownActive.set(false);
     this.captureActive.set(false);
+
+    this.activeStream.set(CONFIG.BACKEND_STREAM_URL);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+
+  private async leave() {
+    await this.cancelStream();
+    this.activeSnapshot.set(undefined);
+    this.countDownActive.set(false);
+    this.captureActive.set(false);
+    // wait until changes are propagated, i.e. image source is really set
+    await this.router.navigate(['']);
   }
 
   private clearInactivityTimer() {
@@ -84,7 +92,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   startCountDown() {
     this.resetInactivityTimer();
     this.countDownActive.set(true);
-    this.countDownRemaining.set(COUNTDOWN);
+    this.countDownRemaining.set(CONFIG.COUNTDOWN_CAPTURE_SECONDS);
 
     const subCountDown = interval(1000).subscribe(async (_) => {
       this.countDownRemaining.update((v) => v - 1);
@@ -98,41 +106,43 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   async takeSnapshot() {
     this.resetInactivityTimer();
+    await this.cancelStream();
+
     this.captureActive.set(true);
-    this.activeStream.set(undefined);
-    this.cs.captureSnapshot().subscribe((res) => {
-      this.activeSnapshot.set(res);
-      this.captureActive.set(false);
-    });
+    const res = await firstValueFrom(this.cs.captureSnapshot());
+    this.activeSnapshot.set(res);
+    this.captureActive.set(false);
   }
 
-  async cancel() {
-    await this.deleteSnapshot(false);
-    await this.router.navigate(['']);
+  async delete() {
+    await firstValueFrom(
+      this.cs.deleteSnapshot(this.activeSnapshot()!.image_path),
+    );
   }
 
-  async deleteSnapshot(reStartCountdown: boolean = true) {
+  async deleteAndLeave() {
+    await this.delete();
+    await this.leave();
+  }
+
+  async deleteAndRetry() {
     this.resetInactivityTimer();
-    this.cs.deleteSnapshot(this.activeSnapshot()!.image_path).subscribe((_) => {
-      this.activeSnapshot.set(undefined);
-      if (reStartCountdown) {
-        this.startCountDown();
-      } else {
-        this.reset();
-      }
-    });
+    await this.delete();
+    await this.reset();
+    this.startCountDown();
   }
 
-  async saveAndPrintSnapshot() {
+  async saveAndPrint() {
     this.resetInactivityTimer();
-    this.cs
-      .printSnapshot({
+    await firstValueFrom(
+      this.cs.printSnapshot({
         image_path: this.activeSnapshot()!.image_path,
         copies: 1,
         landscape: true,
-      })
-      .subscribe((_) => {
-        this.router.navigate(['']);
-      });
+      }),
+    );
+    await this.leave();
   }
+
+  protected readonly CONFIG = CONFIG;
 }
