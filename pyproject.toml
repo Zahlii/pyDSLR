@@ -27,6 +27,7 @@ types-pytz = "^2024.1.0.20240417"
 black = "^24.4.2"
 isort = "^5.13.2"
 opencv-python = "^4.11.0.86"
+types-ujson = "^5.10.0.20250326"
 
 [tool.pylint]
 max-line-length = 150

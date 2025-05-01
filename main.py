@@ -8,20 +8,25 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.responses import FileResponse
 
-from pydslr.config.r6m2 import ImageSettings, R6M2Config
-from pydslr.tools.camera import Camera, CaptureDevice, OpenCVCaptureDevice, OverlayCaptureDevice
+from pydslr.tools.camera import OpenCVCaptureDevice, OverlayCaptureDevice
 from pydslr.tools.exif import ExifInfo, get_exif
+from pydslr.tools.layout_engine import Layout, LayoutEngine
 from pydslr.tools.printer import PrinterService
 
 camera: Optional[OverlayCaptureDevice] = None
+
+
+root_path = Path(__file__).parent
+
 img_path = Path("~").expanduser() / "dslr-tool"
 img_path.mkdir(exist_ok=True)
 logging.info("Saving pictures to %s", img_path)
@@ -49,12 +54,7 @@ async def lifespan(_):
     """
     # pylint: disable=global-statement
     global camera
-    # with Camera[R6M2Config]() as c:
-    #     with c.config_context(R6M2Config(imgsettings=ImageSettings(imageformat="Large Fine JPEG"))):
-    #         camera = OverlayCaptureDevice(c, overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png")
-    #         yield
-    with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png") as c:
-        # with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None) as c:
+    with LayoutEngine.get_capture_device() as c:
         camera = c
         yield
 
@@ -144,9 +144,25 @@ def do_print(print_request: PrintRequest):
     )
 
 
+@backend_router.get("/available_layouts")
+def available_layouts() -> List[Layout]:
+    return LayoutEngine.available_layouts()
+
+
+@backend_router.get("/layout/image/{filename}")
+def get_layout_image(filename: str):
+    return FileResponse(LayoutEngine.get_image(filename))
+
+
+@backend_router.post("/layout")
+def set_layout(layout: Layout):
+    LayoutEngine.set_layout(layout)
+    return True
+
+
 app.mount("/api", backend_router)
 
-ui_path = Path(__file__).parent / "booth-ui"
+ui_path = root_path / "booth-ui"
 app.mount("/", StaticFiles(directory=ui_path / "dist" / "photo-booth-ui" / "browser", html=True), name="static")
 
 if __name__ == "__main__":

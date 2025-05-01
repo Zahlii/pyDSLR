@@ -4,6 +4,14 @@ import { Observable } from 'rxjs';
 import { CONFIG } from './config';
 
 /**
+ * Interface representing a layout configuration
+ */
+export interface Layout {
+  file: string | null;
+  layout: string;
+}
+
+/**
  * Interface representing a print request
  */
 export interface PrintRequest {
@@ -59,5 +67,22 @@ export class CaptureService {
    */
   printSnapshot(printRequest: PrintRequest): Observable<boolean> {
     return this.http.post<boolean>(`${CONFIG.BACKEND_URL}/print`, printRequest);
+  }
+
+  /**
+   * Retrieves available layouts from the backend
+   * @returns An Observable with array of available layouts
+   */
+  getAvailableLayouts(): Observable<Layout[]> {
+    return this.http.get<Layout[]>(`${CONFIG.BACKEND_URL}/available_layouts`);
+  }
+
+  /**
+   * Sets the current layout configuration
+   * @param layout The layout configuration to set
+   * @returns An Observable that resolves to true if the layout was set successfully
+   */
+  setLayout(layout: Layout): Observable<boolean> {
+    return this.http.post<boolean>(`${CONFIG.BACKEND_URL}/layout`, layout);
   }
 }

@@ -9,7 +9,7 @@ import {
 import { MatButton } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom, interval, Subscription, timer } from 'rxjs';
-import { CaptureService, SnapshotResponse } from '../capture.service';
+import { CaptureService, Layout, SnapshotResponse } from '../capture.service';
 import { CONFIG } from '../config';
 
 @Component({
@@ -30,6 +30,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   );
 
   private inactivityTimer: Subscription | null = null;
+  private layout: Layout = { layout: '1', file: null };
 
   constructor(
     private cs: CaptureService,
@@ -38,7 +39,8 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.startInactivityTimer();
-    this.reset();
+    this.reset().then();
+    this.layout = this.router.getCurrentNavigation()?.extras.state as Layout;
   }
 
   ngOnDestroy() {
@@ -69,7 +71,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
-  private async leave() {
+  protected async leave() {
     await this.cancelStream();
     this.activeSnapshot.set(undefined);
     this.countDownActive.set(false);

@@ -1,4 +1,12 @@
 <div class="container">
   <h1>Welcome to the Photo Booth</h1>
-  <button mat-flat-button color="primary" routerLink="/preview">Start!</button>
+  <h2>Chose your layout</h2>
+  <div id="layouts">
+    @for (layout of availableLayouts(); track layout.id) {
+      <app-layout-preview
+        [layout]="layout"
+        (click)="choseLayout(layout)"
+      ></app-layout-preview>
+    }
+  </div>
 </div>

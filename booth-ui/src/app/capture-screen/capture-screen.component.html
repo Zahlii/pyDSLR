@@ -18,6 +18,7 @@
   <div class="flex">
     @if (!captureActive()) {
       @if (!activeSnapshot()) {
+        <button mat-stroked-button (click)="leave()">Back to Start</button>
         <button mat-flat-button (click)="startCountDown()">Start!</button>
       } @else {
         <button mat-stroked-button (click)="deleteAndLeave()">
