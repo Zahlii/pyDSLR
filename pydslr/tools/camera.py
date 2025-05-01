@@ -137,6 +137,13 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
             self._cap.release()
             self._cap = None
 
+    def get_lr_coords(self, frame: np.ndarray) -> tuple[int, int]:
+        height, width = frame.shape[:2]
+        target_width = int(height * 3 / 2)
+        # Otherwise crop width to match target ratio
+        crop_width = (width - target_width) // 2
+        return crop_width, width - crop_width
+
     def preview_as_numpy(self) -> np.ndarray:
         if not self._cap or not self._cap.isOpened():
             self._initialize_capture()
@@ -148,8 +155,12 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
         if not ret:
             raise PyDSLRException("Failed to read frame from webcam")
 
-        # Convert BGR to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Get crop dimensions
+        left, right = self.get_lr_coords(frame)
+
+        # Crop and convert BGR to RGB
+        cropped_frame = frame[:, left:right]
+        rgb_frame = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB)
         return rgb_frame
 
     def preview_as_bytes(self) -> bytes:
@@ -168,7 +179,7 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
         return buffer.tobytes()
 
     def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
-        # Get frame in RGB format
+        # Get frame in RGB format with 3:2 aspect ratio
         frame = self.preview_as_numpy()
 
         # Generate filename with timestamp if not provided
