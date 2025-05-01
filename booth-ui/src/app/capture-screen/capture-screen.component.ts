@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
-import { interval, Subscription } from 'rxjs';
+import {interval, Subscription, timer} from 'rxjs';
 import { CaptureService, SnapshotResponse } from '../capture.service';
 
 const COUNTDOWN = 3;
@@ -22,6 +22,7 @@ const STREAM = 'http://localhost:8000/api/stream';
 })
 export class CaptureScreenComponent implements OnInit, OnDestroy {
   countDownActive = signal(false);
+  captureActive = signal(false);
   countDownRemaining = signal(COUNTDOWN);
   activeStream: WritableSignal<string | undefined> = signal(STREAM);
 
@@ -37,6 +38,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.startInactivityTimer();
+    this.reset();
   }
 
   ngOnDestroy() {
@@ -51,9 +53,21 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
         this.activeStream.set(undefined);
         this.activeSnapshot.set(undefined);
         this.countDownActive.set(false);
-        await this.router.navigate(['']);
+        this.captureActive.set(false);
+        // wait until changes are propagated, i.e. image source is really set
+        const sub = timer(100).subscribe(async (_) => {
+          await this.router.navigate(['']);
+          sub.unsubscribe();
+        });
       }
     });
+  }
+
+  private reset() {
+    this.activeStream.set(STREAM);
+    this.activeSnapshot.set(undefined);
+    this.countDownActive.set(false);
+    this.captureActive.set(false);
   }
 
   private clearInactivityTimer() {
@@ -71,7 +85,8 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     this.resetInactivityTimer();
     this.countDownActive.set(true);
     this.countDownRemaining.set(COUNTDOWN);
-    const subCountDown = interval(1000).subscribe(async (i) => {
+
+    const subCountDown = interval(1000).subscribe(async (_) => {
       this.countDownRemaining.update((v) => v - 1);
       if (this.countDownRemaining() <= 0) {
         subCountDown.unsubscribe();
@@ -83,18 +98,28 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   async takeSnapshot() {
     this.resetInactivityTimer();
+    this.captureActive.set(true);
     this.activeStream.set(undefined);
     this.cs.captureSnapshot().subscribe((res) => {
       this.activeSnapshot.set(res);
+      this.captureActive.set(false);
     });
   }
 
-  async deleteSnapshot() {
+  async cancel() {
+    await this.deleteSnapshot(false);
+    await this.router.navigate(['']);
+  }
+
+  async deleteSnapshot(reStartCountdown: boolean = true) {
     this.resetInactivityTimer();
-    this.activeStream.set(STREAM);
     this.cs.deleteSnapshot(this.activeSnapshot()!.image_path).subscribe((_) => {
       this.activeSnapshot.set(undefined);
-      this.startCountDown();
+      if (reStartCountdown) {
+        this.startCountDown();
+      } else {
+        this.reset();
+      }
     });
   }
 

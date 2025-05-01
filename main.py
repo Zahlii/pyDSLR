@@ -6,10 +6,11 @@ import base64
 import logging
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,7 +21,7 @@ from pydslr.tools.camera import Camera, CaptureDevice, OpenCVCaptureDevice, Over
 from pydslr.tools.exif import ExifInfo, get_exif
 from pydslr.tools.printer import PrinterService
 
-camera: Optional[CaptureDevice] = None
+camera: Optional[OverlayCaptureDevice] = None
 img_path = Path("~").expanduser() / "dslr-tool"
 img_path.mkdir(exist_ok=True)
 logging.info("Saving pictures to %s", img_path)
@@ -53,6 +54,7 @@ async def lifespan(_):
     #         camera = OverlayCaptureDevice(c, overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png")
     #         yield
     with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path="/Users/niklas.fruehauf/Downloads/Ein Bild V1 (2).png") as c:
+        # with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None) as c:
         camera = c
         yield
 
@@ -75,6 +77,20 @@ def stream():
     :return:
     """
     return StreamingResponse(camera.stream_preview(max_fps=30, max_time=timedelta(seconds=15)), media_type="multipart/x-mixed-replace;boundary=frame")
+
+
+@backend_router.get("/last")
+def last_image():
+    """
+    Return last captured image or placeholder if available
+    :return: JPEG image response
+    """
+    if camera and camera.placeholder():
+        with BytesIO() as bio:
+            camera.placeholder().save(bio, format="JPEG")
+            bio.seek(0)
+            return Response(content=bio.getvalue(), media_type="image/jpeg")
+    return None
 
 
 @backend_router.get("/config")

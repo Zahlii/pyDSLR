@@ -203,7 +203,7 @@ class OverlayCaptureDevice(CaptureDevice[T]):
     A capture device that applies an overlay image on top of another capture device's output.
     """
 
-    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path], mirror_image: bool = True):
+    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path] | None = None, mirror_image: bool = True):
         """
         Initialize an overlay capture device
 
@@ -212,13 +212,31 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         :param mirror_image: If True, mirror the base image left/right before applying overlay
         """
         self._inner_device = inner_device
-        self.overlay_path = Path(overlay_path)
-        self.mirror_image = mirror_image
-        if not self.overlay_path.exists():
-            raise PyDSLRException(f"Overlay image not found at {self.overlay_path}")
+        self._overlay_path: Union[str, Path] | None = None
+        self._overlay_image: Image.Image | None = None
+        self._last_preview: Image.Image | None = None
+        self._overlay_image_resized: Image.Image | None = None
 
-        # Load the overlay image
-        self._overlay_image = Image.open(self.overlay_path).convert("RGBA")
+        self.mirror_image = mirror_image
+        self.set_overlay(overlay_path)
+
+    def set_overlay(self, overlay_path: Union[str, Path] | None):
+        if overlay_path is not None:
+            self._overlay_path = Path(overlay_path)
+            if not self._overlay_path.exists():
+                raise PyDSLRException(f"Overlay image not found at {self._overlay_path}")
+
+            # Load the overlay image
+            self._overlay_image = Image.open(self._overlay_path).convert("RGBA")
+            self._last_preview = Image.fromarray(self._inner_device.preview_as_numpy())
+            assert self._last_preview is not None
+            if self._overlay_image.size != self._last_preview.size:
+                self._overlay_image_resized = self._overlay_image.resize(self._last_preview.size, Image.Resampling.LANCZOS)
+            else:
+                self._overlay_image_resized = self._overlay_image
+        else:
+            self._overlay_image = None
+            self._overlay_image_resized = None
 
     def __enter__(self):
         self._inner_device.__enter__()
@@ -235,22 +253,23 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         :return: Image with overlay applied
         """
         # Handle other formats
-        base_image = Image.fromarray(image).convert("RGBA")
+        base_image = Image.fromarray(image)
+        base_image = base_image.convert("RGBA")
 
         # Mirror the image if requested
         if self.mirror_image:
             base_image = base_image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
-        # Resize overlay to match base image if needed
-        if self._overlay_image.size != base_image.size:
-            overlay_resized = self._overlay_image.resize(base_image.size, Image.Resampling.LANCZOS)
+        if self._overlay_image_resized is not None:
+            # Composite the images
+            result = Image.alpha_composite(base_image, self._overlay_image_resized).convert("RGB")
         else:
-            overlay_resized = self._overlay_image
-
-        # Composite the images
-        result = Image.alpha_composite(base_image.convert("RGBA"), overlay_resized).convert("RGB")
-
+            result = base_image.convert("RGB")
+        self._last_preview = result
         return np.array(result)
+
+    def placeholder(self) -> Image.Image | None:
+        return self._last_preview
 
     def preview_as_numpy(self) -> np.ndarray:
         base_image = self._inner_device.preview_as_numpy()
