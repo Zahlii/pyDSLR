@@ -10,7 +10,7 @@ import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Generic, List, Optional, Set, TypeVar, Union, get_args
+from typing import Generator, Generic, List, Optional, Set, Tuple, TypeVar, Union, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
@@ -245,7 +245,7 @@ class OverlayCaptureDevice(CaptureDevice[T]):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._inner_device.__exit__(exc_type, exc_val, exc_tb)
 
-    def _apply_overlay(self, image: np.ndarray) -> np.ndarray:
+    def _apply_overlay(self, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Apply the overlay to a numpy array image
 
@@ -266,14 +266,14 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         else:
             result = base_image.convert("RGB")
         self._last_preview = result
-        return np.array(result)
+        return np.array(base_image.convert("RGB")), np.array(result)
 
     def placeholder(self) -> Image.Image | None:
         return self._last_preview
 
     def preview_as_numpy(self) -> np.ndarray:
         base_image = self._inner_device.preview_as_numpy()
-        return self._apply_overlay(base_image)
+        return self._apply_overlay(base_image)[1]
 
     def preview_as_bytes(self) -> bytes:
         overlay_array = self.preview_as_numpy()
@@ -294,19 +294,16 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         with Image.open(original_path) as img:
             base_image = np.array(img)
 
-        # Apply overlay
-        result_image = self._apply_overlay(base_image)
+        # Apply overlay and potentially mirror
+        base_image, result_image = self._apply_overlay(base_image)
+        if self.mirror_image:
+            Image.fromarray(base_image).save(original_path, format="JPEG", quality=95, optimize=True)
 
         # Create a path for the overlay version
         stem = original_path.stem
         suffix = original_path.suffix
         overlay_path = original_path.with_name(f"{stem}_overlay{suffix}")
-
-        # Save the overlay version with high quality to maintain similar file size to original
-        if suffix.lower() in (".jpg", ".jpeg"):
-            Image.fromarray(result_image).save(overlay_path, format="JPEG", quality=95, optimize=True)
-        else:
-            Image.fromarray(result_image).save(overlay_path)
+        Image.fromarray(result_image).save(overlay_path, format="JPEG", quality=95, optimize=True)
 
         # Return the overlay path
         return overlay_path
