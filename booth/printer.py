@@ -1,3 +1,7 @@
+"""
+Printer helper
+"""
+
 import logging
 import subprocess
 from pathlib import Path
@@ -6,8 +10,6 @@ from typing import List, Optional
 
 class PrinterError(Exception):
     """Exception raised when printing operations fail."""
-
-    pass
 
 
 class PrinterService:
@@ -37,8 +39,8 @@ class PrinterService:
             if stderr_output:
                 error_msg += f"\nDetailed Error: {stderr_output}"
             raise PrinterError(error_msg) from e
-        except FileNotFoundError:
-            raise PrinterError(f"Command not found - printing system is not properly installed")
+        except FileNotFoundError as exc:
+            raise PrinterError("Command not found - printing system is not properly installed") from exc
 
     @classmethod
     def get_all_printers(cls) -> list[str]:

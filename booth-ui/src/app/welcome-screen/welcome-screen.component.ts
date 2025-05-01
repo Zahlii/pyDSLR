@@ -1,6 +1,5 @@
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
-import { MatButton } from '@angular/material/button';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { CaptureService, Layout } from '../capture.service';
 import { firstValueFrom } from 'rxjs';
 import { LayoutPreviewComponent } from './layout-preview/layout-preview.component';

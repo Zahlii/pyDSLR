@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Type
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 try:
     import exiftool  # type: ignore
@@ -23,9 +23,15 @@ class ExifInfo(BaseModel):
     exposure_time: float | None = None
     width: int
     height: int
+    size: int
+
+    @computed_field  # type: ignore
+    @property
+    def human_size(self) -> str:
+        return f"{self.size / 1024 / 1024:.2f} MB"
 
 
-def get_exif(path: Path | str) -> ExifInfo | None:
+def get_exif(path: Path) -> ExifInfo | None:
     """
     Return the key EXIF infos for a freshly taken picture
     :param path:
@@ -49,4 +55,5 @@ def get_exif(path: Path | str) -> ExifInfo | None:
         exposure_time=get_field("EXIF:ExposureTime", cls=float),
         width=get_field("File:ImageWidth", "EXIF:ImageWidth", cls=int),
         height=get_field("File:ImageHeight", "EXIF:ImageHeight", cls=int),
+        size=path.stat().st_size,
     )

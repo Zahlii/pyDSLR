@@ -16,6 +16,7 @@ black = "^24.4.2"
 numpy = "^1.26.4"
 pillow = "^10.3.0"
 pyexiftool = "^0.5.6"
+retry = "^0.9.2"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -28,9 +29,18 @@ black = "^24.4.2"
 isort = "^5.13.2"
 opencv-python = "^4.11.0.86"
 types-ujson = "^5.10.0.20250326"
+types-retry = "^0.9.9.20250322"
 
 [tool.pylint]
 max-line-length = 150
+disable = [
+    "import-outside-toplevel",
+    "no-member",
+]
+extension-pkg-allow-list  = [
+    "ujson"
+]
+
 # poetry run pylint **/*.py
 
 [tool.mypy]

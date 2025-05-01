@@ -32,8 +32,10 @@ export interface ExifInfo {
 
 export interface SnapshotResponse {
   image_path: string;
+  image_path_camera_raw?: string;
   image_b64: string;
   exif: ExifInfo | null;
+  all_paths: string[];
 }
 
 @Injectable({

@@ -15,16 +15,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.responses import FileResponse
 
-from pydslr.tools.camera import OverlayCaptureDevice
-from pydslr.tools.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
+from booth.capture_device import OverlayCaptureDevice
+from booth.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
 
 camera: Optional[OverlayCaptureDevice] = None
 
 
-root_path = Path(__file__).parent
+root_path = Path(__file__).parent.parent
 
 
 class PrintRequest(BaseModel):
+    """
+    Print request with settings
+    """
+
     image_path: str
     copies: int = 1
     landscape: bool = True
@@ -97,7 +101,14 @@ def create_snapshot() -> SnapshotResponse:
     """
     assert camera is not None, "Camera not initialized"
 
-    result_path = camera.capture(folder=img_path)
+    result_paths = camera.capture(folder=img_path)
+    result_path = result_paths[0]
+
+    camera_raw: Path | None = None
+    for pth in result_paths[1:]:
+        if pth.suffix.lower() not in {".jpg", ".jpeg"}:
+            camera_raw = pth
+            break
 
     if LayoutEngine.has_overlay():
         result_path_raw = result_path.with_name(result_path.name.replace("_overlay", ""))
@@ -107,12 +118,18 @@ def create_snapshot() -> SnapshotResponse:
     return SnapshotResponse.from_file(
         image=result_path,
         image_raw=result_path_raw,
+        image_camera_raw=camera_raw,
     )
 
 
 @backend_router.delete("/snapshots")
 def delete_snapshot(snapshot_names: List[str]):
-    for snapshot_name in snapshot_names:
+    """
+    Delete a list of snapshots
+    :param snapshot_names:
+    :return:
+    """
+    for snapshot_name in set(snapshot_names):
         full_path = img_path / snapshot_name
         assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
 
@@ -126,6 +143,11 @@ def delete_snapshot(snapshot_names: List[str]):
 
 @backend_router.post("/print")
 def do_print(print_request: PrintRequest):
+    """
+    Issue a print command
+    :param print_request:
+    :return:
+    """
     full_path = img_path / print_request.image_path
     assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
@@ -137,22 +159,41 @@ def do_print(print_request: PrintRequest):
 
 @backend_router.get("/available_layouts")
 def available_layouts() -> List[Layout]:
+    """
+    Retrieve available layouts
+    :return:
+    """
     return LayoutEngine.available_layouts()
 
 
 @backend_router.get("/layout/image/{filename}")
 def get_layout_image(filename: str):
+    """
+    Resolve and download a layout image
+    :param filename:
+    :return:
+    """
     return FileResponse(LayoutEngine.get_image(filename))
 
 
 @backend_router.post("/layout")
 def set_layout(layout: Layout) -> bool:
+    """
+    Update the active layout
+    :param layout:
+    :return:
+    """
     LayoutEngine.set_layout(layout)
     return True
 
 
 @backend_router.post("/layout/render")
 def render_layout(image_names: List[str]) -> SnapshotResponse:
+    """
+    Given a list of image names, render the layout
+    :param image_names:
+    :return:
+    """
     return LayoutEngine.render_layout(image_names)
 
 

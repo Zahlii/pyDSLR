@@ -1,5 +1,7 @@
 <div class="container">
-  @if (!activeSnapshot()) {
+  @if (captureActive()) {
+    <h1>Smile!</h1>
+  } @else if (!activeSnapshot()) {
     <h1>Click below to start the countdown & capture</h1>
   } @else {
     <h1>Wonderful!</h1>

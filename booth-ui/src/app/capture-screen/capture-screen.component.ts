@@ -3,12 +3,11 @@ import {
   OnDestroy,
   OnInit,
   signal,
-  ViewChild,
   WritableSignal,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { firstValueFrom, interval, Subscription, timer } from 'rxjs';
+import { Router } from '@angular/router';
+import { firstValueFrom, interval, Subscription } from 'rxjs';
 import { CaptureService, Layout, SnapshotResponse } from '../capture.service';
 import { CONFIG } from '../config';
 
@@ -148,7 +147,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
 
   async delete() {
     await firstValueFrom(
-      this.cs.deleteSnapshots(this.snapshotStack.map((s) => s.image_path)),
+      this.cs.deleteSnapshots(this.snapshotStack.flatMap((s) => s.all_paths)),
     );
   }
 

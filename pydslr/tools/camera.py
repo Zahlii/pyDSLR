@@ -6,16 +6,18 @@ Main Camera class
 import datetime
 import io
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Generic, List, Optional, Set, Tuple, TypeVar, Union, get_args
+from typing import Generator, Generic, List, Optional, Set, TypeVar, get_args
 
 import gphoto2 as gp  # type: ignore
 import numpy as np
 import psutil
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+from retry import retry
 from tqdm import trange
 
 from pydslr.config.base import BaseConfig
@@ -26,16 +28,24 @@ from pydslr.utils import GPWidgetItem, PyDSLRException, timed
 T = TypeVar("T", bound=BaseConfig)
 
 
+class GImage:
+    name: str
+    folder: str
+
+
+ImageBunch = List[Path]
+
+
 class CaptureDevice(ABC, Generic[T]):
     @abstractmethod
-    def preview_as_numpy(self) -> np.ndarray:
+    def preview_as_numpy(self) -> np.ndarray | None:
         """
         Load the current preview/LiveView image as numpy array via Image.open()
         :return:
         """
 
     @abstractmethod
-    def preview_as_bytes(self) -> bytes:
+    def preview_as_bytes(self) -> bytes | None:
         """
         Load the current preview/LiveView image as byte array in JPEG format. If settings were recently updated,
         this may not yet fully reflect it, as the camera usually keeps the preview buffered.
@@ -61,7 +71,7 @@ class CaptureDevice(ABC, Generic[T]):
         max_time: Optional[datetime.timedelta] = None,
         max_images: Optional[int] = None,
         as_numpy=False,
-    ) -> Generator[bytes | np.ndarray, None, None]:
+    ) -> Generator[bytes | np.ndarray | None, None, None]:
         """
         Yield images as part of a media stream
         :param max_images: Max number of images to return.
@@ -71,15 +81,15 @@ class CaptureDevice(ABC, Generic[T]):
         :return:
         """
         last = None
-        first = datetime.datetime.utcnow()
+        first = datetime.datetime.now()
         delay = None if max_fps is None else datetime.timedelta(milliseconds=1000 / max_fps)
         count = 0
         while True:
             if last is not None and delay is not None:
-                remaining_delay = last + delay - datetime.datetime.utcnow()
+                remaining_delay = last + delay - datetime.datetime.now()
                 if remaining_delay.total_seconds() > 0:
                     time.sleep(remaining_delay.total_seconds())
-            last = datetime.datetime.utcnow()
+            last = datetime.datetime.now()
             if max_time is not None and (last - first) > max_time:
                 return
 
@@ -88,236 +98,21 @@ class CaptureDevice(ABC, Generic[T]):
 
             count += 1
             if not as_numpy:
-                yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + self.preview_as_bytes() + b"\r\n"
+                preview = self.preview_as_bytes()
+                if preview is None:
+                    break
+                yield b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + preview + b"\r\n"
             else:
                 yield self.preview_as_numpy()
 
     @abstractmethod
-    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+    def capture(self, folder: Optional[Path] = None, keep_on_camera: bool = False) -> ImageBunch:
         """
         Capture a full image to disk.
-        :param folder: can be set instead of target path. If set, image will be put into this folder with the camera image name.
+        :param folder: If set, image will be put into this folder with the camera image name.
         :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
-        :param path: target path, set to current working directory / camera image name per default.
         :return: The final path.
         """
-
-
-class OpenCVCaptureDevice(CaptureDevice[T]):
-    def get_config(self, ignore_cache: bool = False) -> Optional["T"]:
-        return None
-
-    def __init__(self, camera_index: int = 0):
-        """
-        Initialize a webcam capture device
-
-        :param camera_index: Index of the camera to use (default 0 for primary webcam)
-        """
-        self.camera_index = camera_index
-        self._cap = None
-        self._initialize_capture()
-
-    def _initialize_capture(self):
-        import cv2
-
-        self._cap = cv2.VideoCapture(self.camera_index)
-        if not self._cap.isOpened():
-            raise PyDSLRException(f"Failed to open webcam at index {self.camera_index}")
-
-    def __enter__(self):
-        if not self._cap or not self._cap.isOpened():
-            self._initialize_capture()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def close(self):
-        if self._cap and self._cap.isOpened():
-            self._cap.release()
-            self._cap = None
-
-    def get_lr_coords(self, frame: np.ndarray) -> tuple[int, int]:
-        height, width = frame.shape[:2]
-        target_width = int(height * 3 / 2)
-        # Otherwise crop width to match target ratio
-        crop_width = (width - target_width) // 2
-        return crop_width, width - crop_width
-
-    def preview_as_numpy(self) -> np.ndarray:
-        if not self._cap or not self._cap.isOpened():
-            self._initialize_capture()
-
-        import cv2
-
-        assert self._cap is not None
-        ret, frame = self._cap.read()
-        if not ret:
-            raise PyDSLRException("Failed to read frame from webcam")
-
-        # Get crop dimensions
-        left, right = self.get_lr_coords(frame)
-
-        # Crop and convert BGR to RGB
-        cropped_frame = frame[:, left:right]
-        rgb_frame = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2RGB)
-        return rgb_frame
-
-    def preview_as_bytes(self) -> bytes:
-        import cv2
-
-        # Get RGB frame from preview_as_numpy
-        rgb_frame = self.preview_as_numpy()
-
-        # Convert RGB back to BGR for cv2.imencode which expects BGR
-        bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
-
-        success, buffer = cv2.imencode(".jpg", bgr_frame)
-        if not success:
-            raise PyDSLRException("Failed to encode frame as JPEG")
-
-        return buffer.tobytes()
-
-    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
-        # Get frame in RGB format with 3:2 aspect ratio
-        frame = self.preview_as_numpy()
-
-        # Generate filename with timestamp if not provided
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"webcam_{timestamp}.jpg"
-
-        if path is None:
-            if folder is None:
-                path = Path(filename)
-            else:
-                path = folder / filename
-
-        # Make sure parent directory exists
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        import cv2
-
-        # Convert RGB to BGR for cv2.imwrite which expects BGR
-        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        # Write the image to disk
-        success = cv2.imwrite(str(path), bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
-        if not success:
-            raise PyDSLRException(f"Failed to save image to {path}")
-
-        logging.info("Got picture with EXIF: %s in %s", get_exif(path), path)
-        return path
-
-
-class OverlayCaptureDevice(CaptureDevice[T]):
-    """
-    A capture device that applies an overlay image on top of another capture device's output.
-    """
-
-    def __init__(self, inner_device: CaptureDevice[T], overlay_path: Union[str, Path] | None = None, mirror_image: bool = True):
-        """
-        Initialize an overlay capture device
-
-        :param inner_device: The base capture device to wrap
-        :param overlay_path: Path to the overlay image (PNG with transparency recommended)
-        :param mirror_image: If True, mirror the base image left/right before applying overlay
-        """
-        self._inner_device = inner_device
-        self._overlay_path: Union[str, Path] | None = None
-        self._overlay_image: Image.Image | None = None
-        self._last_preview: Image.Image | None = None
-        self._overlay_image_resized: Image.Image | None = None
-
-        self.mirror_image = mirror_image
-        self.set_overlay(overlay_path)
-
-    def set_overlay(self, overlay_path: Union[str, Path] | None):
-        if overlay_path is not None:
-            self._overlay_path = Path(overlay_path)
-            if not self._overlay_path.exists():
-                raise PyDSLRException(f"Overlay image not found at {self._overlay_path}")
-
-            # Load the overlay image
-            self._overlay_image = Image.open(self._overlay_path).convert("RGBA")
-            self._last_preview = Image.fromarray(self._inner_device.preview_as_numpy())
-            assert self._last_preview is not None
-            if self._overlay_image.size != self._last_preview.size:
-                self._overlay_image_resized = self._overlay_image.resize(self._last_preview.size, Image.Resampling.LANCZOS)
-            else:
-                self._overlay_image_resized = self._overlay_image
-        else:
-            self._overlay_image = None
-            self._overlay_image_resized = None
-
-    def __enter__(self):
-        self._inner_device.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._inner_device.__exit__(exc_type, exc_val, exc_tb)
-
-    def _apply_overlay(self, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Apply the overlay to a numpy array image
-
-        :param image: Base image as numpy array
-        :return: Image with overlay applied
-        """
-        # Handle other formats
-        base_image = Image.fromarray(image)
-        base_image = base_image.convert("RGBA")
-
-        # Mirror the image if requested
-        if self.mirror_image:
-            base_image = base_image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-
-        if self._overlay_image_resized is not None:
-            # Composite the images
-            result = Image.alpha_composite(base_image, self._overlay_image_resized).convert("RGB")
-        else:
-            result = base_image.convert("RGB")
-        self._last_preview = result
-        return np.array(base_image.convert("RGB")), np.array(result)
-
-    def placeholder(self) -> Image.Image | None:
-        return self._last_preview
-
-    def preview_as_numpy(self) -> np.ndarray:
-        base_image = self._inner_device.preview_as_numpy()
-        return self._apply_overlay(base_image)[1]
-
-    def preview_as_bytes(self) -> bytes:
-        overlay_array = self.preview_as_numpy()
-
-        # Convert to bytes
-        buffer = io.BytesIO()
-        Image.fromarray(overlay_array).save(buffer, format="JPEG")
-        return buffer.getvalue()
-
-    def get_config(self, ignore_cache: bool = False) -> Optional["T"]:
-        return self._inner_device.get_config(ignore_cache=ignore_cache)
-
-    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
-        # Get original capture from inner device
-        original_path = self._inner_device.capture(path=path, folder=folder, keep_on_camera=keep_on_camera)
-
-        # Read the captured image
-        with Image.open(original_path) as img:
-            base_image = np.array(img)
-
-        # Apply overlay and potentially mirror
-        base_image, result_image = self._apply_overlay(base_image)
-        if self.mirror_image:
-            Image.fromarray(base_image).save(original_path, format="JPEG", quality=95, optimize=True)
-
-        # Create a path for the overlay version
-        stem = original_path.stem
-        suffix = original_path.suffix
-        overlay_path = original_path.with_name(f"{stem}_overlay{suffix}")
-        Image.fromarray(result_image).save(overlay_path, format="JPEG", quality=95, optimize=True)
-
-        # Return the overlay path
-        return overlay_path
 
 
 class Camera(CaptureDevice[T]):
@@ -330,6 +125,7 @@ class Camera(CaptureDevice[T]):
         # pylint: disable=not-callable
         self.camera = gp.Camera()
         self._config = None
+        self._can_capture = threading.Event()
 
     def __enter__(self):
         self.camera.init()
@@ -351,14 +147,21 @@ class Camera(CaptureDevice[T]):
                 proc.kill()
 
     @timed
-    def preview_as_bytes(self) -> bytes:
-        _, file = gp.gp_camera_capture_preview(self.camera)
+    def preview_as_bytes(self) -> bytes | None:
+        self._can_capture.clear()
+        err, file = gp.gp_camera_capture_preview(self.camera)
+        if err:
+            return None
         data = bytearray(gp.gp_file_get_data_and_size(file)[1])
+        self._can_capture.set()
         return data
 
-    def preview_as_numpy(self) -> np.ndarray:
+    def preview_as_numpy(self) -> np.ndarray | None:
         with io.BytesIO() as buffer:
-            buffer.write(self.preview_as_bytes())
+            res = self.preview_as_bytes()
+            if not res:
+                return None
+            buffer.write(res)
             buffer.seek(0)
             return np.asarray(Image.open(buffer))
 
@@ -377,61 +180,9 @@ class Camera(CaptureDevice[T]):
         with path.open("wb") as fp:
             fp.write(data)
 
-    @timed
-    def bulb_capture(self, shutter_press_time: datetime.timedelta, path: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
-        """
-        Keeps the shutter button pressed fully for the given time, taking just one image
-
-        :param shutter_press_time: Time for the shutter to stay pressed
-        :param path: target path, set to current working directory / camera image name per default.
-        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
-        :return:
-        """
+    def _press_and_release(self, shutter_press_time: datetime.timedelta) -> List[GImage]:
         self.set_config(self.get_config().press_shutter())
-        time.sleep(shutter_press_time.total_seconds())
-        self.set_config(self.get_config().release_shutter())
-
-        _image = None
-        start_wait_at = datetime.datetime.now()
-        while (datetime.datetime.now() - start_wait_at).total_seconds() < 20:
-            evt = gp.gp_camera_wait_for_event(self.camera, 100)
-            if evt[1] == gp.GP_EVENT_FILE_ADDED:
-                _image = evt[2]
-            elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
-                break
-
-        if _image is None:
-            raise PyDSLRException("No capture event detected")
-
-        _, c_file = gp.gp_camera_file_get(self.camera, _image.folder, _image.name, gp.GP_FILE_TYPE_NORMAL)
-        c_path = Path(_image.name) if path is None else path
-        c_file.save(str(c_path))
-
-        logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
-
-        if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
-            gp.gp_camera_file_delete(self.camera, _image.folder, _image.name)
-
-        return c_path
-
-    @timed
-    def highspeed_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
-        """
-        Keeps the shutter button pressed fully for the given time, downloading all captured images.
-
-        :param shutter_press_time: Time for the shutter to stay pressed
-        :param folder: Target folder, defaults to current working directory. Images will be named as on camera.
-        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
-        :return: All paths captured.
-        """
-
-        if folder is None:
-            folder = Path().parent
-
-        if not folder.exists():
-            raise ValueError(f"Folder {folder} does not exist")
-
-        self.set_config(self.get_config().press_shutter())
+        logging.info("Pressing shutter")
         start_at = datetime.datetime.now()
 
         _backlog = []
@@ -447,62 +198,114 @@ class Camera(CaptureDevice[T]):
                 break
 
         self.set_config(self.get_config().release_shutter())
+        logging.info("Released shutter")
+        return _backlog + self._collect_images_added()
 
+    def _collect_images_added(self, max_wait_seconds=20) -> List[GImage]:
+        """
+        Collects a list of images added to the camera within the specified time frame.
+
+        This method waits for camera events and gathers images that are added during
+        the specified waiting period. If no "file added" events are captured and the
+        time expires, it raises a PyDSLRException.
+
+        :param max_wait_seconds: Maximum time to wait for image addition events, in seconds
+            (default is 20).
+        :return: A list of added images.
+        :rtype: List[GImage]
+        :raises PyDSLRException: If no capture event or file addition is detected
+            within the allowed timeframe.
+        """
+        _images = []
         start_wait_at = datetime.datetime.now()
-        while (datetime.datetime.now() - start_wait_at).total_seconds() < 20:
+        while (datetime.datetime.now() - start_wait_at).total_seconds() < max_wait_seconds:
             evt = gp.gp_camera_wait_for_event(self.camera, 100)
             if evt[1] == gp.GP_EVENT_FILE_ADDED:
-                _backlog.append(evt[2])
+                _images.append(evt[2])
             elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
-                break
+                return _images
+
+        if not _images:
+            raise PyDSLRException("No capture event detected")
+
+        return _images
+
+    def _download_images(self, images: List[GImage], keep_on_camera=False, folder: Optional[Path] = None) -> List[Path]:
+        """
+        Downloads images from a camera to a specified folder. It retrieves each image, saves it
+        to local storage, and optionally deletes the image from the camera based on the provided
+        configuration and flag.
+
+        :param images: List of GImage objects to download.
+        :param keep_on_camera: Whether to keep the images on the camera after download. Defaults to False.
+        :param folder: Optional local folder where the images will be saved. Defaults to the parent of the current
+            directory if not specified.
+        :return: A list of Paths representing the locations of the saved images.
+
+        :raises ValueError: If the specified folder does not exist.
+        """
+        if folder is None:
+            folder = Path().parent
+
+        if not folder.exists():
+            raise ValueError(f"Folder {folder} does not exist")
 
         paths = []
-        for file in _backlog:
-            _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
-            c_path = folder / file.name
-            paths.append(c_path)
+        for image in images:
+            c_file = gp.check_result(gp.gp_camera_file_get(self.camera, image.folder, image.name, gp.GP_FILE_TYPE_NORMAL))
+            c_path = folder / image.name
             c_file.save(str(c_path))
 
+            if c_path.stat().st_size == 0:
+                c_path.unlink()
+                logging.warning("Got zero-byte image during capture(). Make sure auto focus is possible.")
+                continue
+
+            paths.append(c_path)
             logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
 
             if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
-                gp.gp_camera_file_delete(self.camera, file.folder, file.name)
+                gp.check_result(gp.gp_camera_file_delete(self.camera, image.folder, image.name))
 
         return paths
 
     @timed
-    def capture(self, path: Optional[Path] = None, folder: Optional[Path] = None, keep_on_camera: bool = False) -> Path:
+    def highspeed_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
+        """
+        Keeps the shutter button pressed fully for the given time, downloading all captured images.
+
+        :param shutter_press_time: Time for the shutter to stay pressed
+        :param folder: Target folder, defaults to current working directory. Images will be named as on camera.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :return: All paths captured.
+        """
+        return self._download_images(self._press_and_release(shutter_press_time), folder=folder, keep_on_camera=keep_on_camera)
+
+    @timed
+    def bulb_capture(self, shutter_press_time: datetime.timedelta, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
+        """
+        Keeps the shutter button pressed fully for the given time, taking just one image
+
+        :param shutter_press_time: Time for the shutter to stay pressed
+        :param folder: target path, set to current working directory / camera image name per default.
+        :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
+        :return:
+        """
+        return self._download_images(self._press_and_release(shutter_press_time), folder=folder, keep_on_camera=keep_on_camera)
+
+    @retry(tries=5, delay=0.1, backoff=2, logger=logging.root)
+    @timed
+    def capture(self, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
         """
         Capture a full image to disk.
-        :param folder: can be set instead of target path. If set, image will be put into this folder with the camera image name.
+        :param folder: If set, image will be put into this folder with the camera image name.
         :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
-        :param path: target path, set to current working directory / camera image name per default.
         :return: The final path.
         """
-        if path is not None:
-            if self.get_config().is_raw():
-                assert ".cr3" in path.suffixes, "RAW format enabled, file format should be cr3"
-            else:
-                assert ".jpg" in path.suffixes or ".jpeg" in path.suffixes, "RAW format disabled, image should be stores as JPG."
-
-        _, file = gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE)
-        if path is None:
-            if folder is None:
-                path = Path(file.name)
-            else:
-                path = folder / file.name
-        _, c_file = gp.gp_camera_file_get(self.camera, file.folder, file.name, gp.GP_FILE_TYPE_NORMAL)
-        c_file.save(str(path))
-
-        if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
-            gp.gp_camera_file_delete(self.camera, file.folder, file.name)
-
-        if path.stat().st_size == 0:
-            path.unlink()
-            raise PyDSLRException("Got zero-byte image during capture(). Make sure auto focus is possible.")
-
-        logging.info("Got picture with EXIF: %s in %s", get_exif(path), path)
-        return path
+        self._can_capture.wait()
+        logging.info("Triggering capture")
+        gp.check_result(gp.gp_camera_trigger_capture(self.camera))
+        return self._download_images(self._collect_images_added(), keep_on_camera=keep_on_camera, folder=folder)
 
     def focus_stack(self, n_images: int = 10, distance: int = 1, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
         """
@@ -515,7 +318,7 @@ class Camera(CaptureDevice[T]):
         """
         results = []
         for _ in trange(n_images, desc="Performing focus stack"):
-            results.append(self.capture(path=folder, keep_on_camera=keep_on_camera))
+            results.extend(self.capture(path=folder, keep_on_camera=keep_on_camera))
             self.set_config(self.get_config().focus_step(distance=distance), ignore_cache=True)
         return results
 
@@ -570,7 +373,6 @@ class Camera(CaptureDevice[T]):
 
                     new_value = getattr(getattr(new_config, field), field2)
                     old_value = getattr(getattr(old_config, field), field2)
-                    update = True
                     if new_value != old_value and new_value is not None:
                         logging.info(
                             "Updating %s from %s -> %s",
@@ -583,6 +385,7 @@ class Camera(CaptureDevice[T]):
                         gp.check_result(gp.gp_widget_set_value(gp_field, new_value))
 
         if updated_settings:
+            time.sleep(0.05)
             # this may throw I/O errors, but works
             gp.check_result(gp.gp_camera_set_config(self.camera, gp_config))
             self._config = gp_config
@@ -647,9 +450,9 @@ if __name__ == "__main__":
         c.set_config(
             R6M2Config(
                 imgsettings=ImageSettings(iso="400"),
-                settings=Settings(capturetarget="Internal RAM"),
-                capturesettings=CaptureSettings(aperture="5.6", shutterspeed="2"),
+                settings=Settings(capturetarget="Memory card"),
+                capturesettings=CaptureSettings(aperture="5.6"),
             )
         )
-        for j in zip(range(20), c.stream_preview()):
+        for j in range(5):
             print(c.capture(keep_on_camera=True))
