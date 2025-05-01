@@ -125,7 +125,7 @@ class Camera(CaptureDevice[T]):
         # pylint: disable=not-callable
         self.camera = gp.Camera()
         self._config = None
-        self._can_capture = threading.Event()
+        self._lock = threading.RLock()
 
     def __enter__(self):
         self.camera.init()
@@ -148,13 +148,12 @@ class Camera(CaptureDevice[T]):
 
     @timed
     def preview_as_bytes(self) -> bytes | None:
-        self._can_capture.clear()
-        err, file = gp.gp_camera_capture_preview(self.camera)
-        if err:
-            return None
-        data = bytearray(gp.gp_file_get_data_and_size(file)[1])
-        self._can_capture.set()
-        return data
+        with self._lock:
+            err, file = gp.gp_camera_capture_preview(self.camera)
+            if err:
+                return None
+            data = bytearray(gp.gp_file_get_data_and_size(file)[1])
+            return data
 
     def preview_as_numpy(self) -> np.ndarray | None:
         with io.BytesIO() as buffer:
@@ -181,25 +180,26 @@ class Camera(CaptureDevice[T]):
             fp.write(data)
 
     def _press_and_release(self, shutter_press_time: datetime.timedelta) -> List[GImage]:
-        self.set_config(self.get_config().press_shutter())
-        logging.info("Pressing shutter")
-        start_at = datetime.datetime.now()
+        with self._lock:
+            self.set_config(self.get_config().press_shutter())
+            logging.info("Pressing shutter")
+            start_at = datetime.datetime.now()
 
-        _backlog = []
+            _backlog = []
 
-        while True:
-            elapsed = datetime.datetime.now() - start_at
-            remaining = (shutter_press_time - elapsed).total_seconds()
-            if remaining > 0:
-                evt = tuple(gp.gp_camera_wait_for_event(self.camera, int(1000 * remaining)))
-                if evt[1] == gp.GP_EVENT_FILE_ADDED:
-                    _backlog.append(evt[2])
-            else:
-                break
+            while True:
+                elapsed = datetime.datetime.now() - start_at
+                remaining = (shutter_press_time - elapsed).total_seconds()
+                if remaining > 0:
+                    evt = tuple(gp.gp_camera_wait_for_event(self.camera, int(1000 * remaining)))
+                    if evt[1] == gp.GP_EVENT_FILE_ADDED:
+                        _backlog.append(evt[2])
+                else:
+                    break
 
-        self.set_config(self.get_config().release_shutter())
-        logging.info("Released shutter")
-        return _backlog + self._collect_images_added()
+            self.set_config(self.get_config().release_shutter())
+            logging.info("Released shutter")
+            return _backlog + self._collect_images_added()
 
     def _collect_images_added(self, max_wait_seconds=20) -> List[GImage]:
         """
@@ -216,19 +216,20 @@ class Camera(CaptureDevice[T]):
         :raises PyDSLRException: If no capture event or file addition is detected
             within the allowed timeframe.
         """
-        _images = []
-        start_wait_at = datetime.datetime.now()
-        while (datetime.datetime.now() - start_wait_at).total_seconds() < max_wait_seconds:
-            evt = gp.gp_camera_wait_for_event(self.camera, 100)
-            if evt[1] == gp.GP_EVENT_FILE_ADDED:
-                _images.append(evt[2])
-            elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
-                return _images
+        with self._lock:
+            _images = []
+            start_wait_at = datetime.datetime.now()
+            while (datetime.datetime.now() - start_wait_at).total_seconds() < max_wait_seconds:
+                evt = gp.gp_camera_wait_for_event(self.camera, 100)
+                if evt[1] == gp.GP_EVENT_FILE_ADDED:
+                    _images.append(evt[2])
+                elif evt[1] == gp.GP_EVENT_CAPTURE_COMPLETE:
+                    return _images
 
-        if not _images:
-            raise PyDSLRException("No capture event detected")
+            if not _images:
+                raise PyDSLRException("No capture event detected")
 
-        return _images
+            return _images
 
     def _download_images(self, images: List[GImage], keep_on_camera=False, folder: Optional[Path] = None) -> List[Path]:
         """
@@ -250,22 +251,23 @@ class Camera(CaptureDevice[T]):
         if not folder.exists():
             raise ValueError(f"Folder {folder} does not exist")
 
-        paths = []
-        for image in images:
-            c_file = gp.check_result(gp.gp_camera_file_get(self.camera, image.folder, image.name, gp.GP_FILE_TYPE_NORMAL))
-            c_path = folder / image.name
-            c_file.save(str(c_path))
+        with self._lock:
+            paths = []
+            for image in images:
+                c_file = gp.check_result(gp.gp_camera_file_get(self.camera, image.folder, image.name, gp.GP_FILE_TYPE_NORMAL))
+                c_path = folder / image.name
+                c_file.save(str(c_path))
 
-            if c_path.stat().st_size == 0:
-                c_path.unlink()
-                logging.warning("Got zero-byte image during capture(). Make sure auto focus is possible.")
-                continue
+                if c_path.stat().st_size == 0:
+                    c_path.unlink()
+                    logging.warning("Got zero-byte image during capture(). Make sure auto focus is possible.")
+                    continue
 
-            paths.append(c_path)
-            logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
+                paths.append(c_path)
+                logging.info("Got picture with EXIF: %s in %s", get_exif(c_path), c_path)
 
-            if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
-                gp.check_result(gp.gp_camera_file_delete(self.camera, image.folder, image.name))
+                if not keep_on_camera or not self.get_config().is_sdcard_capture_enabled():
+                    gp.check_result(gp.gp_camera_file_delete(self.camera, image.folder, image.name))
 
         return paths
 
@@ -302,10 +304,10 @@ class Camera(CaptureDevice[T]):
         :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
         :return: The final path.
         """
-        self._can_capture.wait()
-        logging.info("Triggering capture")
-        gp.check_result(gp.gp_camera_trigger_capture(self.camera))
-        return self._download_images(self._collect_images_added(), keep_on_camera=keep_on_camera, folder=folder)
+        with self._lock:
+            logging.info("Triggering capture")
+            gp.check_result(gp.gp_camera_trigger_capture(self.camera))
+            return self._download_images(self._collect_images_added(), keep_on_camera=keep_on_camera, folder=folder)
 
     def focus_stack(self, n_images: int = 10, distance: int = 1, folder: Optional[Path] = None, keep_on_camera: bool = False) -> List[Path]:
         """
@@ -316,26 +318,27 @@ class Camera(CaptureDevice[T]):
         :param keep_on_camera: If capture is to SD Card, keeps the images after downloading.
         :return: All paths captured.
         """
-        results = []
-        for _ in trange(n_images, desc="Performing focus stack"):
-            results.extend(self.capture(path=folder, keep_on_camera=keep_on_camera))
-            self.set_config(self.get_config().focus_step(distance=distance), ignore_cache=True)
-        return results
+        with self._lock:
+            results = []
+            for _ in trange(n_images, desc="Performing focus stack"):
+                results.extend(self.capture(path=folder, keep_on_camera=keep_on_camera))
+                self.set_config(self.get_config().focus_step(distance=distance), ignore_cache=True)
+            return results
 
     def get_config(self, ignore_cache: bool = False) -> "T":
         """
         Get the current configuration of the camera.
         :return:
         """
+        with self._lock:
+            response = self.get_json_config(ignore_cache=ignore_cache)
 
-        response = self.get_json_config(ignore_cache=ignore_cache)
+            def _get_kwargs(node):
+                if "children" not in node:
+                    return node["value"]
+                return {n["name"]: _get_kwargs(n) for n in node["children"]}
 
-        def _get_kwargs(node):
-            if "children" not in node:
-                return node["value"]
-            return {n["name"]: _get_kwargs(n) for n in node["children"]}
-
-        return get_args(self.__orig_class__)[0](**_get_kwargs(response))  # type: ignore
+            return get_args(self.__orig_class__)[0](**_get_kwargs(response))  # type: ignore
 
     @contextmanager
     def config_context(self, new_config: T):
@@ -344,10 +347,12 @@ class Camera(CaptureDevice[T]):
         :param new_config: New config to be set temporarily
         :return:
         """
-        old_config = self.get_config()
-        changed_fields = self.set_config(new_config)
+        with self._lock:
+            old_config = self.get_config()
+            changed_fields = self.set_config(new_config)
         yield
-        self.set_config(old_config, only_fields=changed_fields)
+        with self._lock:
+            self.set_config(old_config, only_fields=changed_fields)
 
     @timed
     def set_config(self, new_config: T, only_fields: Optional[Set[str]] = None, ignore_cache: bool = False) -> Set[str]:
@@ -360,43 +365,45 @@ class Camera(CaptureDevice[T]):
         :param only_fields: Exhaustive list of names of fields that should be set.
         :return:
         """
-        updated_settings = set()
-        old_config = self.get_config(ignore_cache=ignore_cache)
-        gp_config = self._gp_get_camera_config_cached(ignore_cache=ignore_cache)
+        with self._lock:
+            updated_settings = set()
+            old_config = self.get_config(ignore_cache=ignore_cache)
+            gp_config = self._gp_get_camera_config_cached(ignore_cache=ignore_cache)
 
-        for field in new_config.model_fields_set:
-            if getattr(new_config, field, None) is not None:
-                for field2 in getattr(new_config, field).model_fields_set:
-                    if only_fields is not None and field2 not in only_fields:
-                        logging.debug("Skipping over %s.%s, as not in only_fields", field, field2)
-                        continue
+            for field in new_config.model_fields_set:
+                if getattr(new_config, field, None) is not None:
+                    for field2 in getattr(new_config, field).model_fields_set:
+                        if only_fields is not None and field2 not in only_fields:
+                            logging.debug("Skipping over %s.%s, as not in only_fields", field, field2)
+                            continue
 
-                    new_value = getattr(getattr(new_config, field), field2)
-                    old_value = getattr(getattr(old_config, field), field2)
-                    if new_value != old_value and new_value is not None:
-                        logging.info(
-                            "Updating %s from %s -> %s",
-                            (field, field2),
-                            old_value,
-                            new_value,
-                        )
-                        updated_settings.add(field2)
-                        _, gp_field = gp.gp_widget_get_child_by_name(gp_config, field2)
-                        gp.check_result(gp.gp_widget_set_value(gp_field, new_value))
+                        new_value = getattr(getattr(new_config, field), field2)
+                        old_value = getattr(getattr(old_config, field), field2)
+                        if new_value != old_value and new_value is not None:
+                            logging.info(
+                                "Updating %s from %s -> %s",
+                                (field, field2),
+                                old_value,
+                                new_value,
+                            )
+                            updated_settings.add(field2)
+                            _, gp_field = gp.gp_widget_get_child_by_name(gp_config, field2)
+                            gp.check_result(gp.gp_widget_set_value(gp_field, new_value))
 
-        if updated_settings:
-            time.sleep(0.05)
-            # this may throw I/O errors, but works
-            gp.check_result(gp.gp_camera_set_config(self.camera, gp_config))
-            self._config = gp_config
+            if updated_settings:
+                time.sleep(0.05)
+                # this may throw I/O errors, but works
+                gp.check_result(gp.gp_camera_set_config(self.camera, gp_config))
+                self._config = gp_config
 
-        return updated_settings
+            return updated_settings
 
     @timed
     def _gp_get_camera_config_cached(self, ignore_cache: bool = False):
-        if self._config is None or ignore_cache:
-            self._config = self.camera.get_config()
-        return self._config
+        with self._lock:
+            if self._config is None or ignore_cache:
+                self._config = self.camera.get_config()
+            return self._config
 
     def get_json_config(self, ignore_cache: bool = False):
         """
