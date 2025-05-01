@@ -190,7 +190,7 @@ class OpenCVCaptureDevice(CaptureDevice[T]):
         bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         # Write the image to disk
-        success = cv2.imwrite(str(path), bgr_frame)
+        success = cv2.imwrite(str(path), bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
         if not success:
             raise PyDSLRException(f"Failed to save image to {path}")
 

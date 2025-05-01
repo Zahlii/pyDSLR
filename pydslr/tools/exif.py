@@ -4,7 +4,7 @@ Quick EXIF tools
 
 import logging
 from pathlib import Path
-from typing import List, Type
+from typing import Type
 
 from pydantic import BaseModel
 

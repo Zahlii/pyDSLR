@@ -2,8 +2,6 @@
 REST Server to communicate with Camera
 """
 
-import base64
-import logging
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
@@ -17,25 +15,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.responses import FileResponse
 
-from pydslr.tools.camera import OpenCVCaptureDevice, OverlayCaptureDevice
-from pydslr.tools.exif import ExifInfo, get_exif
-from pydslr.tools.layout_engine import Layout, LayoutEngine
-from pydslr.tools.printer import PrinterService
+from pydslr.tools.camera import OverlayCaptureDevice
+from pydslr.tools.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
 
 camera: Optional[OverlayCaptureDevice] = None
 
 
 root_path = Path(__file__).parent
-
-img_path = Path("~").expanduser() / "dslr-tool"
-img_path.mkdir(exist_ok=True)
-logging.info("Saving pictures to %s", img_path)
-
-
-class SnapshotResponse(BaseModel):
-    image_path: str
-    image_b64: str
-    exif: ExifInfo | None = None
 
 
 class PrintRequest(BaseModel):
@@ -103,33 +89,38 @@ def config():
 
 
 @backend_router.get("/snapshot")
-def create_snapshot():
+def create_snapshot() -> SnapshotResponse:
     """
     Take and save a snapshot with current settings
 
     :return:
     """
+    assert camera is not None, "Camera not initialized"
+
     result_path = camera.capture(folder=img_path)
 
-    # Read the image file and encode it as base64
-    with result_path.open("rb") as image_file:
-        encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
+    if LayoutEngine.has_overlay():
+        result_path_raw = result_path.with_name(result_path.name.replace("_overlay", ""))
+    else:
+        result_path_raw = result_path
 
-    return SnapshotResponse(
-        image_path=str(result_path.relative_to(img_path)), exif=get_exif(result_path), image_b64=f"data:image/jpeg;base64,{encoded_image}"
+    return SnapshotResponse.from_file(
+        image=result_path,
+        image_raw=result_path_raw,
     )
 
 
-@backend_router.delete("/snapshot")
-def delete_snapshot(snapshot_name: str):
-    full_path = img_path / snapshot_name
-    assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
+@backend_router.delete("/snapshots")
+def delete_snapshot(snapshot_names: List[str]):
+    for snapshot_name in snapshot_names:
+        full_path = img_path / snapshot_name
+        assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
 
-    raw_path = full_path.with_name(full_path.name.replace("_overlay", ""))
-    if raw_path.exists():
-        raw_path.unlink()
-    if full_path.exists():
-        full_path.unlink()
+        raw_path = full_path.with_name(full_path.name.replace("_overlay", ""))
+        if raw_path.exists():
+            raw_path.unlink()
+        if full_path.exists():
+            full_path.unlink()
     return True
 
 
@@ -139,9 +130,9 @@ def do_print(print_request: PrintRequest):
     assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
 
-    return PrinterService.print_image(
-        image_path=full_path, copies=print_request.copies, printer_name=print_request.printer_name, landscape=print_request.landscape
-    )
+    # return PrinterService.print_image(
+    #     image_path=full_path, copies=print_request.copies, printer_name=print_request.printer_name, landscape=print_request.landscape
+    # )
 
 
 @backend_router.get("/available_layouts")
@@ -155,9 +146,14 @@ def get_layout_image(filename: str):
 
 
 @backend_router.post("/layout")
-def set_layout(layout: Layout):
+def set_layout(layout: Layout) -> bool:
     LayoutEngine.set_layout(layout)
     return True
+
+
+@backend_router.post("/layout/render")
+def render_layout(image_names: List[str]) -> SnapshotResponse:
+    return LayoutEngine.render_layout(image_names)
 
 
 app.mount("/api", backend_router)

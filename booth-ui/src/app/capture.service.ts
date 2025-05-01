@@ -9,6 +9,7 @@ import { CONFIG } from './config';
 export interface Layout {
   file: string | null;
   layout: string;
+  n_images: number;
 }
 
 /**
@@ -50,13 +51,13 @@ export class CaptureService {
   }
 
   /**
-   * Deletes a previously captured snapshot
-   * @param snapshotName The name of the snapshot to delete
+   * Deletes previously captured snapshots
+   * @param snapshotNames The names of the snapshots to delete
    * @returns An Observable that resolves to true if deletion was successful
    */
-  deleteSnapshot(snapshotName: string): Observable<boolean> {
-    return this.http.delete<boolean>(`${CONFIG.BACKEND_URL}/snapshot`, {
-      params: { snapshot_name: snapshotName },
+  deleteSnapshots(snapshotNames: string[]): Observable<boolean> {
+    return this.http.delete<boolean>(`${CONFIG.BACKEND_URL}/snapshots`, {
+      body: snapshotNames,
     });
   }
 
@@ -84,5 +85,17 @@ export class CaptureService {
    */
   setLayout(layout: Layout): Observable<boolean> {
     return this.http.post<boolean>(`${CONFIG.BACKEND_URL}/layout`, layout);
+  }
+
+  /**
+   * Renders a layout with the given image names
+   * @param imageNames Array of image names to render in the layout
+   * @returns An Observable with the rendered snapshot response
+   */
+  renderLayout(imageNames: string[]): Observable<SnapshotResponse> {
+    return this.http.post<SnapshotResponse>(
+      `${CONFIG.BACKEND_URL}/layout/render`,
+      imageNames,
+    );
   }
 }

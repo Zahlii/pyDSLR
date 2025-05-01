@@ -7,7 +7,7 @@ import {
   WritableSignal,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, interval, Subscription, timer } from 'rxjs';
 import { CaptureService, Layout, SnapshotResponse } from '../capture.service';
 import { CONFIG } from '../config';
@@ -30,7 +30,8 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   );
 
   private inactivityTimer: Subscription | null = null;
-  private layout: Layout = { layout: '1', file: null };
+  protected layout: Layout = { layout: '1', file: null, n_images: 1 };
+  private snapshotStack: SnapshotResponse[] = [];
 
   constructor(
     private cs: CaptureService,
@@ -40,7 +41,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.startInactivityTimer();
     this.reset().then();
-    this.layout = this.router.getCurrentNavigation()?.extras.state as Layout;
+    this.layout = history.state as Layout;
   }
 
   ngOnDestroy() {
@@ -62,17 +63,23 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
-  private async reset() {
-    this.activeSnapshot.set(undefined);
-    this.countDownActive.set(false);
-    this.captureActive.set(false);
-
+  private async restartStream() {
     this.activeStream.set(CONFIG.BACKEND_STREAM_URL);
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
+  private async reset() {
+    this.snapshotStack = [];
+    this.activeSnapshot.set(undefined);
+    this.countDownActive.set(false);
+    this.captureActive.set(false);
+
+    await this.restartStream();
+  }
+
   protected async leave() {
     await this.cancelStream();
+    this.snapshotStack = [];
     this.activeSnapshot.set(undefined);
     this.countDownActive.set(false);
     this.captureActive.set(false);
@@ -91,34 +98,57 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     this.startInactivityTimer();
   }
 
-  startCountDown() {
+  async countDownAndSnapshot(count: number = 1, delaySeconds?: number) {
+    await this.restartStream();
+
     this.resetInactivityTimer();
     this.countDownActive.set(true);
-    this.countDownRemaining.set(CONFIG.COUNTDOWN_CAPTURE_SECONDS);
+    this.countDownRemaining.set(
+      delaySeconds || CONFIG.COUNTDOWN_CAPTURE_SECONDS,
+    );
 
-    const subCountDown = interval(1000).subscribe(async (_) => {
-      this.countDownRemaining.update((v) => v - 1);
-      if (this.countDownRemaining() <= 0) {
-        subCountDown.unsubscribe();
-        this.countDownActive.set(false);
-        await this.takeSnapshot();
-      }
+    await new Promise<void>((resolve) => {
+      const int = setInterval(() => {
+        this.countDownRemaining.update((v) => v - 1);
+        if (this.countDownRemaining() <= 0) {
+          clearInterval(int);
+          resolve();
+        }
+      }, 1000);
     });
+
+    this.countDownActive.set(false);
+    await this.takeSnapshot(count);
   }
 
-  async takeSnapshot() {
+  async takeSnapshot(count: number = 1) {
     this.resetInactivityTimer();
     await this.cancelStream();
 
     this.captureActive.set(true);
     const res = await firstValueFrom(this.cs.captureSnapshot());
-    this.activeSnapshot.set(res);
+    this.snapshotStack.push(res);
     this.captureActive.set(false);
+
+    if (count === 1) {
+      // finished with all
+      await this.cancelStream();
+      const finalRes = await firstValueFrom(
+        this.cs.renderLayout(this.snapshotStack.map((s) => s.image_path)),
+      );
+      this.activeSnapshot.set(finalRes);
+      this.snapshotStack.push(finalRes); // for deletion
+    } else {
+      await this.countDownAndSnapshot(
+        count - 1,
+        CONFIG.COUNTDOWN_CAPTURE_SECONDS,
+      );
+    }
   }
 
   async delete() {
     await firstValueFrom(
-      this.cs.deleteSnapshot(this.activeSnapshot()!.image_path),
+      this.cs.deleteSnapshots(this.snapshotStack.map((s) => s.image_path)),
     );
   }
 
@@ -131,7 +161,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     this.resetInactivityTimer();
     await this.delete();
     await this.reset();
-    this.startCountDown();
+    await this.countDownAndSnapshot(this.layout.n_images);
   }
 
   async saveAndPrint() {

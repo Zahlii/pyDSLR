@@ -1,5 +1,9 @@
 <div class="container">
-  <h1>Click below to start the countdown & capture</h1>
+  @if (!activeSnapshot()) {
+    <h1>Click below to start the countdown & capture</h1>
+  } @else {
+    <h1>Wonderful!</h1>
+  }
   <div id="overlay-container">
     @if (!activeSnapshot()) {
       @if (!captureActive()) {
@@ -19,7 +23,9 @@
     @if (!captureActive()) {
       @if (!activeSnapshot()) {
         <button mat-stroked-button (click)="leave()">Back to Start</button>
-        <button mat-flat-button (click)="startCountDown()">Start!</button>
+        <button mat-flat-button (click)="countDownAndSnapshot(layout.n_images)">
+          Start!
+        </button>
       } @else {
         <button mat-stroked-button (click)="deleteAndLeave()">
           Back to Start

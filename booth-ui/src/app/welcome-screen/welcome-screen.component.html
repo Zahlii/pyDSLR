@@ -2,7 +2,7 @@
   <h1>Welcome to the Photo Booth</h1>
   <h2>Chose your layout</h2>
   <div id="layouts">
-    @for (layout of availableLayouts(); track layout.id) {
+    @for (layout of availableLayouts(); track $index) {
       <app-layout-preview
         [layout]="layout"
         (click)="choseLayout(layout)"
