@@ -23,7 +23,7 @@ h1 {
 }
 div.container {
   width: 80vw;
-  height: 80vh;
+  height: calc(100vh - 64px);
 
   display: flex;
   flex-direction: column;

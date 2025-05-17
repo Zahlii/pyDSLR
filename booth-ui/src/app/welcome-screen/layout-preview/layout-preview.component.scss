@@ -5,7 +5,11 @@
   justify-content: center;
   align-items: center;
 }
-
+img {
+  display: block;
+  width: 300px;
+  height: 200px;
+}
 .mat-mdc-card:hover {
   cursor: pointer;
 }
