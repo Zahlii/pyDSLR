@@ -6,10 +6,12 @@ import {
   WritableSignal,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { firstValueFrom, interval, Subscription } from 'rxjs';
 import { CaptureService, Layout, SnapshotResponse } from '../capture.service';
 import { CONFIG } from '../config';
+import { PrintDialogComponent } from '../print-dialog/print-dialog.component';
 
 @Component({
   selector: 'app-capture-screen',
@@ -35,6 +37,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   constructor(
     private cs: CaptureService,
     private router: Router,
+    private dialog: MatDialog,
   ) {}
 
   ngOnInit() {
@@ -166,13 +169,24 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   async save(print = true) {
     this.resetInactivityTimer();
     if (print) {
-      await firstValueFrom(
-        this.cs.printSnapshot({
-          image_path: this.activeSnapshot()!.image_path,
-          copies: 1,
-          landscape: true,
-        }),
-      );
+      const dialogRef = this.dialog.open(PrintDialogComponent, {
+        width: '300px',
+        disableClose: true,
+      });
+
+      const result = await firstValueFrom(dialogRef.afterClosed());
+
+      if (result) {
+        await firstValueFrom(
+          this.cs.printSnapshot({
+            image_path: this.activeSnapshot()!.image_path,
+            copies: result.copies,
+            landscape: true,
+          }),
+        );
+      } else {
+        return; // User cancelled the print operation
+      }
     }
     await this.leave();
   }

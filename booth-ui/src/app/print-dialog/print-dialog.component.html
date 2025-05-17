@@ -1,0 +1,26 @@
+<h2 mat-dialog-title>Print Options</h2>
+<mat-dialog-content>
+  <form [formGroup]="printForm">
+    <mat-form-field appearance="fill" class="full-width">
+      <mat-label>Number of Copies</mat-label>
+      <mat-select formControlName="copies">
+        @for (copy of copies; track $index) {
+          <mat-option [value]="copy">
+            {{ copy }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancelClick()">Back</button>
+  <button
+    mat-flat-button
+    color="primary"
+    (click)="onPrintClick()"
+    [disabled]="!printForm.valid"
+  >
+    Print
+  </button>
+</mat-dialog-actions>
