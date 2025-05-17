@@ -24,16 +24,19 @@
   <div class="flex">
     @if (!captureActive()) {
       @if (!activeSnapshot()) {
-        <button mat-stroked-button (click)="leave()">Back to Start</button>
+        <button mat-stroked-button (click)="leave()">Change Layout</button>
         <button mat-flat-button (click)="countDownAndSnapshot(layout.n_images)">
-          Start!
+          Ready!
         </button>
       } @else {
         <button mat-stroked-button (click)="deleteAndLeave()">
-          Back to Start
+          Delete & Change Layout
         </button>
-        <button mat-stroked-button (click)="deleteAndRetry()">Re-Try</button>
-        <button mat-flat-button (click)="saveAndPrint()">Save & Print</button>
+        <button mat-stroked-button (click)="deleteAndRetry()">
+          Delete & Re-Try
+        </button>
+        <button mat-flat-button (click)="save(false)">Save</button>
+        <button mat-flat-button (click)="save(true)">Save & Print</button>
       }
     }
   </div>

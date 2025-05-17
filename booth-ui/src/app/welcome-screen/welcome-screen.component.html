@@ -1,12 +1,16 @@
 <div class="container">
   <h1>Welcome to the Photo Booth</h1>
   <h2>Chose your layout</h2>
-  <div id="layouts">
-    @for (layout of availableLayouts(); track $index) {
-      <app-layout-preview
-        [layout]="layout"
-        (click)="choseLayout(layout)"
-      ></app-layout-preview>
-    }
+  <div style="width: 100%">
+    <mat-grid-list cols="4" rowHeight="280">
+      @for (layout of availableLayouts(); track $index) {
+        <mat-grid-tile>
+          <app-layout-preview
+            [layout]="layout"
+            (click)="choseLayout(layout)"
+          ></app-layout-preview>
+        </mat-grid-tile>
+      }
+    </mat-grid-list>
   </div>
 </div>

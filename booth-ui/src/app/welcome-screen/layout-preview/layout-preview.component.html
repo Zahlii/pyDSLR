@@ -1,12 +1,17 @@
-<div class="flex">
-  <span>Typ: {{ layout.layout }}</span>
-  @if (layout.file) {
-    <img
-      [src]="CONFIG.BACKEND_URL + '/layout/image/' + layout.file"
-      alt="Preview"
-      width="150px"
-    />
-  } @else {
-    <span>No Overlay</span>
-  }
-</div>
+<mat-card>
+  <mat-card-header>
+    <mat-card-title></mat-card-title>
+    <mat-card-subtitle>Type: {{ layout.layout }}</mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    @if (layout.file) {
+      <img
+        [src]="CONFIG.BACKEND_URL + '/layout/image/' + layout.file"
+        alt="Preview"
+        width="300px"
+      />
+    } @else {
+      <div class="placeholder">No Overlay</div>
+    }
+  </mat-card-content>
+</mat-card>

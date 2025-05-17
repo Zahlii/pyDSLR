@@ -3,12 +3,13 @@ import { Router } from '@angular/router';
 import { CaptureService, Layout } from '../capture.service';
 import { firstValueFrom } from 'rxjs';
 import { LayoutPreviewComponent } from './layout-preview/layout-preview.component';
+import { MatGridList, MatGridTile } from '@angular/material/grid-list';
 
 @Component({
   selector: 'app-welcome-screen',
-  imports: [LayoutPreviewComponent],
+  imports: [LayoutPreviewComponent, MatGridList, MatGridTile],
   templateUrl: './welcome-screen.component.html',
-  styleUrl: './welcome-screen.component.less',
+  styleUrl: './welcome-screen.component.scss',
 })
 export class WelcomeScreenComponent implements OnInit {
   availableLayouts: WritableSignal<any> = signal([]);

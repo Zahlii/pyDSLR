@@ -15,7 +15,7 @@ import { CONFIG } from '../config';
   selector: 'app-capture-screen',
   imports: [MatButton],
   templateUrl: './capture-screen.component.html',
-  styleUrl: './capture-screen.component.less',
+  styleUrl: './capture-screen.component.scss',
 })
 export class CaptureScreenComponent implements OnInit, OnDestroy {
   countDownActive = signal(false);
@@ -163,15 +163,17 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     await this.countDownAndSnapshot(this.layout.n_images);
   }
 
-  async saveAndPrint() {
+  async save(print = true) {
     this.resetInactivityTimer();
-    await firstValueFrom(
-      this.cs.printSnapshot({
-        image_path: this.activeSnapshot()!.image_path,
-        copies: 1,
-        landscape: true,
-      }),
-    );
+    if (print) {
+      await firstValueFrom(
+        this.cs.printSnapshot({
+          image_path: this.activeSnapshot()!.image_path,
+          copies: 1,
+          landscape: true,
+        }),
+      );
+    }
     await this.leave();
   }
 

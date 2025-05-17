@@ -36,6 +36,7 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
     "prettier": "^3.5.3",
+    "schematics-scss-migrate": "^2.3.17",
     "typescript": "~5.7.2"
   }
 }
