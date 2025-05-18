@@ -182,6 +182,8 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
             image_path: this.activeSnapshot()!.image_path,
             copies: result.copies,
             landscape: true,
+            printer_name: 'Canon_SELPHY_CP1500',
+            cmd_args: ['-o', 'PageSize=Postcard.Fullbleed']
           }),
         );
       } else {

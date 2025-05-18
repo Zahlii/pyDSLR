@@ -20,6 +20,7 @@ export interface PrintRequest {
   copies?: number;
   landscape?: boolean;
   printer_name?: string | null;
+  cmd_args?: string[]
 }
 
 export interface ExifInfo {

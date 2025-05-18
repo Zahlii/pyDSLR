@@ -87,10 +87,11 @@ class PrinterService:
         return None
 
     @classmethod
-    def print_image(cls, image_path: Path, copies: int = 1, landscape: bool = True, printer_name: str | None = None) -> bool:
+    def print_image(cls, image_path: Path, copies: int = 1, landscape: bool = True, printer_name: str | None = None, print_args: Optional[List[str]] = None) -> bool:
         """
         Print an image using lpr command.
 
+        :param print_args: Additional settings to be passed to lpr
         :param printer_name: Override default printer
         :param image_path: Path to the image file
         :param copies: Number of copies to print, defaults to 1
@@ -118,6 +119,9 @@ class PrinterService:
         if landscape:
             cmd.extend(["-o", "landscape"])
 
+        if print_args:
+            cmd.extend(print_args)
+
         # Add the file to print
         cmd.append(str(image_path))
 
@@ -127,6 +131,7 @@ class PrinterService:
 
 if __name__ == "__main__":
     ps = PrinterService()
+    print(ps.get_default_printer())
     print(ps.get_all_printers())
 
-    ps.print_image(Path("~/Downloads/test.txt").expanduser(), copies=1, landscape=False)
+    # ps.print_image(Path("~/Downloads/test.txt").expanduser(), copies=1, landscape=False)
