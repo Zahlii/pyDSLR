@@ -19,6 +19,21 @@
         "file": "Jasi_Rahmen_1x1_V1.png",
         "layout": "1"
     },
+        {
+        "name": "1 Picture, Swani Typ 1",
+        "file": "Swani_Rahmen_1x1_V3.png",
+        "layout": "1"
+    },
+    {
+        "name": "1 Picture, Swani Typ 2",
+        "file": "Swani_Rahmen_1x1_V2.png",
+        "layout": "1"
+    },
+    {
+        "name": "1 Picture, Swani Typ 3",
+        "file": "Swani_Rahmen_1x1_V1.png",
+        "layout": "1"
+    },
     {
         "name": "4 Pictures, No Overlay",
         "file": null,
@@ -27,6 +42,11 @@
     {
         "name": "4 Pictures, Jasi",
         "file": "Jasi_Rahmen_2x2_V1.png",
+        "layout": "2x2"
+    },
+    {
+        "name": "4 Pictures, Swani",
+        "file": "Swani_Rahmen_2x2_V1.png",
         "layout": "2x2"
     }
 ]

@@ -1,14 +1,16 @@
 .placeholder {
-  width: 300px;
-  height: 200px;
+  width: calc(180px * 1.5);
+  height: 180px;
   display: flex;
   justify-content: center;
   align-items: center;
+  aspect-ratio: 1.5;
 }
 img {
   display: block;
-  width: 300px;
-  height: 200px;
+  width: calc(180px * 1.5);
+  height: 180px;
+  aspect-ratio: 1.5;
 }
 .mat-mdc-card:hover {
   cursor: pointer;

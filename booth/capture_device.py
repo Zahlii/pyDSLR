@@ -5,6 +5,7 @@ Additional capture device implementations
 import datetime
 import io
 import logging
+import threading
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -155,6 +156,7 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         self._overlay_image_resized: Image.Image | None = None
 
         self.mirror_image = mirror_image
+        self._lock = threading.RLock()
         self.set_overlay(overlay_path)
 
     def set_overlay(self, overlay_path: Union[str, Path] | None):
@@ -163,25 +165,26 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         :param overlay_path:
         :return:
         """
-        if overlay_path is not None:
-            self._overlay_path = Path(overlay_path)
-            if not self._overlay_path.exists():
-                raise PyDSLRException(f"Overlay image not found at {self._overlay_path}")
+        with self._lock:
+            if overlay_path is not None:
+                self._overlay_path = Path(overlay_path)
+                if not self._overlay_path.exists():
+                    raise PyDSLRException(f"Overlay image not found at {self._overlay_path}")
 
-            # Load the overlay image
-            self._overlay_image = Image.open(self._overlay_path).convert("RGBA")
-            prev = self._inner_device.preview_as_numpy()
-            if prev is None:
-                raise ValueError(f"Failed getting preview frame from {self._inner_device}.")
-            self._last_preview = Image.fromarray(prev)
-            assert self._last_preview is not None
-            if self._overlay_image.size != self._last_preview.size:
-                self._overlay_image_resized = self._overlay_image.resize(self._last_preview.size, Image.Resampling.LANCZOS)
+                # Load the overlay image
+                self._overlay_image = Image.open(self._overlay_path).convert("RGBA")
+                prev = self._inner_device.preview_as_numpy()
+                if prev is None:
+                    raise ValueError(f"Failed getting preview frame from {self._inner_device}.")
+                self._last_preview = Image.fromarray(prev)
+                assert self._last_preview is not None
+                if self._overlay_image.size != self._last_preview.size:
+                    self._overlay_image_resized = self._overlay_image.resize(self._last_preview.size, Image.Resampling.LANCZOS)
+                else:
+                    self._overlay_image_resized = self._overlay_image
             else:
-                self._overlay_image_resized = self._overlay_image
-        else:
-            self._overlay_image = None
-            self._overlay_image_resized = None
+                self._overlay_image = None
+                self._overlay_image_resized = None
 
     def __enter__(self):
         self._inner_device.__enter__()
@@ -205,16 +208,20 @@ class OverlayCaptureDevice(CaptureDevice[T]):
         if self.mirror_image:
             base_image = base_image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
-        if self._overlay_image_resized is not None:
-            if self._overlay_image_resized.size != base_image:
-                assert self._overlay_image is not None
-                # can happen if preview and real image have differing sizes
-                self._overlay_image_resized = self._overlay_image.resize(base_image.size, Image.Resampling.LANCZOS)
-            # Composite the images
-            result = Image.alpha_composite(base_image, self._overlay_image_resized).convert("RGB")
-        else:
-            result = base_image.convert("RGB")
-        self._last_preview = result
+        with self._lock:
+
+            if self._overlay_image_resized is not None:
+                if self._overlay_image_resized.size != base_image.size:
+                    assert self._overlay_image is not None
+
+                    # can happen if preview and real image have differing sizes
+                    self._overlay_image_resized = self._overlay_image.resize(base_image.size, Image.Resampling.LANCZOS)
+                # Composite the images
+                result = Image.alpha_composite(base_image, self._overlay_image_resized).convert("RGB")
+            else:
+                result = base_image.convert("RGB")
+            self._last_preview = result
+
         return np.array(base_image.convert("RGB")), np.array(result)
 
     def placeholder(self) -> Image.Image | None:

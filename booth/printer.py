@@ -87,7 +87,9 @@ class PrinterService:
         return None
 
     @classmethod
-    def print_image(cls, image_path: Path, copies: int = 1, landscape: bool = True, printer_name: str | None = None, print_args: Optional[List[str]] = None) -> bool:
+    def print_image(
+        cls, image_path: Path, copies: int = 1, landscape: bool = True, printer_name: str | None = None, print_args: Optional[List[str]] = None
+    ) -> bool:
         """
         Print an image using lpr command.
 

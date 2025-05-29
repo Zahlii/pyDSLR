@@ -2,7 +2,7 @@
   <h1>Welcome to the Photo Booth</h1>
   <h2>Chose your layout</h2>
   <div style="width: 100%">
-    <mat-grid-list cols="4" rowHeight="280">
+    <mat-grid-list cols="4" rowHeight="250">
       @for (layout of availableLayouts(); track $index) {
         <mat-grid-tile>
           <app-layout-preview

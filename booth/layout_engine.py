@@ -12,7 +12,7 @@ import ujson as json
 from PIL import Image
 from pydantic import BaseModel, computed_field
 
-from booth.capture_device import OverlayCaptureDevice, OpenCVCaptureDevice
+from booth.capture_device import OpenCVCaptureDevice, OverlayCaptureDevice
 from pydslr.tools.camera import Camera
 from pydslr.tools.exif import ExifInfo, get_exif
 
@@ -144,7 +144,7 @@ class LayoutEngine:
         """
         from pydslr.config.r6m2 import R6M2Config
 
-        #with Camera[R6M2Config]() as c:
+        # with Camera[R6M2Config]() as c:
         #    LayoutEngine._camera = OverlayCaptureDevice(c, overlay_path=None)
         #    yield LayoutEngine._camera
 

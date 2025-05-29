@@ -66,7 +66,7 @@ def stream():
     Display a live stream from the camera
     :return:
     """
-    return StreamingResponse(camera.stream_preview(max_fps=30, max_time=timedelta(seconds=35)), media_type="multipart/x-mixed-replace;boundary=frame")
+    return StreamingResponse(camera.stream_preview(max_fps=60, max_time=timedelta(seconds=35)), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
 @backend_router.get("/last")
