@@ -31,7 +31,12 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   );
 
   private inactivityTimer: Subscription | null = null;
-  protected layout: Layout = { layout: '1', file: null, n_images: 1 };
+  protected layout: Layout = {
+    layout: '1',
+    file: null,
+    n_images: 1,
+    name: 'Default',
+  };
   private snapshotStack: SnapshotResponse[] = [];
 
   constructor(
@@ -183,7 +188,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
             copies: result.copies,
             landscape: true,
             printer_name: 'Canon_SELPHY_CP1500',
-            cmd_args: ['-o', 'PageSize=Postcard.Fullbleed']
+            cmd_args: ['-o', 'PageSize=Postcard.Fullbleed'],
           }),
         );
       } else {

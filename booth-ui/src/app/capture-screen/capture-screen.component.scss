@@ -1,10 +1,12 @@
 img {
-  width: 60vw;
-  margin-bottom: 18px;
+  max-height: 70vh;
+  aspect-ratio: 1.5;
 }
 #overlay-container {
   position: relative;
-  width: 60vw;
+  max-height: 70vh;
+  aspect-ratio: 1.5;
+  margin-bottom: 18px;
 }
 
 #overlay {

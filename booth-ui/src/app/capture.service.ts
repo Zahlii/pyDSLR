@@ -9,6 +9,7 @@ import { CONFIG } from './config';
 export interface Layout {
   file: string | null;
   layout: string;
+  name: string;
   n_images: number;
 }
 
@@ -20,7 +21,7 @@ export interface PrintRequest {
   copies?: number;
   landscape?: boolean;
   printer_name?: string | null;
-  cmd_args?: string[]
+  cmd_args?: string[];
 }
 
 export interface ExifInfo {

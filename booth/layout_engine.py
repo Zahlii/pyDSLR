@@ -69,6 +69,7 @@ class Layout(BaseModel):
     Definition for a specific layout as used in layout.json
     """
 
+    name: str
     file: str | None = None
     layout: Literal["1", "2x2"] = "1"
 
@@ -100,7 +101,7 @@ class LayoutEngine:
     """
 
     _camera: OverlayCaptureDevice | None = None
-    _active_layout: Layout = Layout(file=None, layout="1")
+    _active_layout: Layout = Layout(file=None, layout="1", name="Default")
 
     @staticmethod
     def available_layouts():
