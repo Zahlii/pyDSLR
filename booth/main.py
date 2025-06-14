@@ -17,6 +17,7 @@ from starlette.responses import FileResponse
 
 from booth.capture_device import OverlayCaptureDevice
 from booth.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
+from booth.printer import PrinterService
 
 camera: Optional[OverlayCaptureDevice] = None
 
@@ -33,6 +34,7 @@ class PrintRequest(BaseModel):
     copies: int = 1
     landscape: bool = True
     printer_name: str | None = None
+    cmd_args: List[str] | None = None
 
 
 @asynccontextmanager
@@ -151,10 +153,14 @@ def do_print(print_request: PrintRequest):
     full_path = img_path / print_request.image_path
     assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
-
-    # return PrinterService.print_image(
-    #     image_path=full_path, copies=print_request.copies, printer_name=print_request.printer_name, landscape=print_request.landscape
-    # )
+    
+    return PrinterService.print_image(
+        image_path=full_path,
+        copies=print_request.copies,
+        printer_name=print_request.printer_name,
+        landscape=print_request.landscape,
+        print_args=print_request.cmd_args,
+    )
 
 
 @backend_router.get("/available_layouts")

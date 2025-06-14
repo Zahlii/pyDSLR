@@ -144,11 +144,8 @@ class LayoutEngine:
         """
         from pydslr.config.r6m2 import R6M2Config
 
-        # with Camera[R6M2Config]() as c:
-        #    LayoutEngine._camera = OverlayCaptureDevice(c, overlay_path=None)
-        #    yield LayoutEngine._camera
-
-        with OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None) as LayoutEngine._camera:
+        with Camera[R6M2Config]() as c:
+            LayoutEngine._camera = OverlayCaptureDevice(c, overlay_path=None)
             yield LayoutEngine._camera
 
     @staticmethod
@@ -189,7 +186,6 @@ class LayoutEngine:
             positions = [(0, 0), (scaled_width, 0), (0, scaled_height), (scaled_width, scaled_height)]
             for img, pos in zip(images, positions):
                 combined.paste(img, pos)
-
             # Save the combined image
             output_path = img_path / f"combined_{raw_files[-1]}"
             combined.save(output_path, "JPEG", quality=95, optimize=True)
