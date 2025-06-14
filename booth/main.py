@@ -153,13 +153,14 @@ def do_print(print_request: PrintRequest):
     full_path = img_path / print_request.image_path
     assert full_path.exists(), f"Image {full_path} does not exist"
     assert img_path in full_path.parents, f"Image {full_path} is not in {img_path}"
-    
+
     return PrinterService.print_image(
         image_path=full_path,
         copies=print_request.copies,
         printer_name=print_request.printer_name,
         landscape=print_request.landscape,
         print_args=print_request.cmd_args,
+        border=75,
     )
 
 

@@ -4,8 +4,11 @@ Printer helper
 
 import logging
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Optional
+
+from PIL import Image
 
 
 class PrinterError(Exception):
@@ -88,11 +91,18 @@ class PrinterService:
 
     @classmethod
     def print_image(
-        cls, image_path: Path, copies: int = 1, landscape: bool = True, printer_name: str | None = None, print_args: Optional[List[str]] = None
+        cls,
+        image_path: Path,
+        copies: int = 1,
+        landscape: bool = True,
+        printer_name: str | None = None,
+        print_args: Optional[List[str]] = None,
+        border: int = 0,
     ) -> bool:
         """
         Print an image using lpr command.
 
+        :param border:
         :param print_args: Additional settings to be passed to lpr
         :param printer_name: Override default printer
         :param image_path: Path to the image file
@@ -102,6 +112,32 @@ class PrinterService:
         """
         if not image_path.exists():
             raise PrinterError(f"Image file does not exist: {image_path}")
+
+        # Create temporary file with border if needed
+        if border > 0:
+            with Image.open(image_path) as img:
+                # Calculate new dimensions while preserving aspect ratio
+                aspect_ratio = img.width / img.height
+                if aspect_ratio >= 1:  # Landscape or square
+                    new_width = img.width + 2 * border
+                    new_height = int(new_width / aspect_ratio)
+                    if new_height % 2 != 0:  # Ensure even height for symmetry
+                        new_height += 1
+                else:  # Portrait
+                    new_height = img.height + 2 * border
+                    new_width = int(new_height * aspect_ratio)
+                    if new_width % 2 != 0:  # Ensure even width for symmetry
+                        new_width += 1
+
+                new_img = Image.new("RGB", (new_width, new_height), "white")
+                # Center the image in the new canvas
+                paste_x = (new_width - img.width) // 2
+                paste_y = (new_height - img.height) // 2
+                new_img.paste(img, (paste_x, paste_y))
+
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    new_img.save(tmp.name, "JPEG")
+                    image_path = Path(tmp.name)
 
         # Get printer
         printer = printer_name or cls.get_default_printer()
