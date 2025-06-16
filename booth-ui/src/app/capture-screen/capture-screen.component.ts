@@ -106,6 +106,9 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   }
 
   async countDownAndSnapshot(count: number = 1, delaySeconds?: number) {
+    if(this.countDownActive()) {
+      return;
+    }
     await this.restartStream();
 
     this.resetInactivityTimer();
@@ -119,7 +122,9 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
         this.countDownRemaining.update((v) => v - 1);
         if (this.countDownRemaining() <= 0) {
           clearInterval(int);
-          resolve();
+          if(this.countDownActive()) {
+            resolve();
+          }
         }
       }, 1000);
     });

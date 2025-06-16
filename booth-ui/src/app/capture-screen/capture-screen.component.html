@@ -11,7 +11,7 @@
       @if (!captureActive()) {
         <img [src]="activeStream()" alt="Live Preview" />
         @if (countDownActive()) {
-          <div id="overlay">{{ countDownRemaining() }}</div>
+          <div id="overlay"><span>Look at the camera above!</span><br />{{ countDownRemaining() }}</div>
         }
       } @else {
         <img src="{{ CONFIG.BACKEND_LAST_URL }}" alt="Last Preview" />

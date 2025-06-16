@@ -14,9 +14,13 @@ img {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 5rem;
+  font-size: 8rem;
   font-weight: bold;
   text-align: center;
   color: white;
   z-index: 10;
+  text-shadow: 0 0 12px #000;
+  span {
+    font-size: 2rem;
+  }
 }
