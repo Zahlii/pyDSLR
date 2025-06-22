@@ -2,6 +2,7 @@
 Helpers to render different layouts
 """
 
+import argparse
 import base64
 import logging
 from contextlib import contextmanager
@@ -16,7 +17,47 @@ from booth.capture_device import OpenCVCaptureDevice, OverlayCaptureDevice
 from pydslr.tools.camera import Camera
 from pydslr.tools.exif import ExifInfo, get_exif
 
-img_path = Path("~").expanduser() / "dslr-tool"
+
+class BoothConfig(BaseModel):
+    """
+    Settings to be passed to UI
+    """
+
+    countdown_capture_seconds: int = 10
+    inactivity_return_seconds: int = 30
+    booth_title: str = "Photo Booth"
+    default_printer: str = "Canon_SELPHY_CP1500"
+    folder_name: str = "new-event"
+    mirror_image: bool = False
+
+    @staticmethod
+    def from_args() -> "BoothConfig":
+        """
+        Create from CLI arguments
+        :return:
+        """
+        parser = argparse.ArgumentParser(description="Photo booth")
+
+        parser.add_argument("--countdown", type=int, default=10, help="Countdown seconds before capture")
+        parser.add_argument("--inactivity", type=int, default=30, help="Seconds of inactivity before returning to start")
+        parser.add_argument("--title", type=str, default="Photo Booth", help="Title of the photo booth")
+        parser.add_argument("--printer", type=str, default="Canon_SELPHY_CP1500", help="Name of the printer to use")
+        parser.add_argument("--mirror", action="store_true", help="Mirror the image (except for RAW files)")
+        parser.add_argument(
+            "--folder",
+            type=str,
+            default="new-event",
+            help="Name of the folder under ~/dslr-tool to save images to. Will be created if it doesn't exist.",
+        )
+        args = parser.parse_args()
+        return BoothConfig(
+            countdown_capture_seconds=args.countdown, inactivity_return_seconds=args.inactivity, booth_title=args.title, default_printer=args.printer
+        )
+
+
+booth_config = BoothConfig.from_args()
+
+img_path = Path("~").expanduser() / "dslr-tool" / booth_config.folder_name
 img_path.mkdir(exist_ok=True)
 logging.info("Saving pictures to %s", img_path)
 
@@ -142,10 +183,14 @@ class LayoutEngine:
         Initiates the used capture device
         :return:
         """
+        LayoutEngine._camera = OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None, mirror_image=booth_config.mirror_image)
+        yield LayoutEngine._camera
+        return
+
         from pydslr.config.r6m2 import R6M2Config
 
         with Camera[R6M2Config]() as c:
-            LayoutEngine._camera = OverlayCaptureDevice(c, overlay_path=None)
+            LayoutEngine._camera = OverlayCaptureDevice(c, overlay_path=None, mirror_image=booth_config.mirror_image)
             yield LayoutEngine._camera
 
     @staticmethod

@@ -71,6 +71,13 @@ poetry run pylint **/*.py
 poetry run mypy . --explicit-package-bases
 ```
 
-## Photo Booth Helpers & REST Service
+# Photo Booth Helpers & REST Service
 
 In `main.py` you also find a basic REST interface that allows you to build basic photo booth applications, also providing a fallback option to use OpenCV + Webcams instead of a gphoto2 compatible attached camera for easier testing. It includes printing helpers, a live stream feature, and an interface to capture and save snapshots.
+
+## Running the Booth & Configuration
+
+You can run the `main.py` file and pass config options as discussed in the `BoothConfig` class. You will need to modify the exact camera to be used in `LayoutEngine.get_capture_device`.
+After this, make sure to have all UI dependencies installed via `npm install` and then simply run `npm run start`, which will make the UI available at `localhost:4200`.
+
+You can further tweak the available layouts by modifying the `layouts.json` file located in the backend folder. The file path specified in there will be relative to the `layouts/folder`. It is recommended to have the overlay images in the same aspect ratio as the camera, usually 2:3 (e.g. for prints to 10x15mm).

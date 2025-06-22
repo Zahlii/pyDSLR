@@ -2,7 +2,6 @@
 REST Server to communicate with Camera
 """
 
-import argparse
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
@@ -13,45 +12,16 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 from starlette.responses import FileResponse
 
 from booth.capture_device import OverlayCaptureDevice
-from booth.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
+from booth.layout_engine import Layout, LayoutEngine, SnapshotResponse, booth_config, img_path
 from booth.printer import PrinterService, PrintRequest
 
 camera: Optional[OverlayCaptureDevice] = None
 
 
 root_path = Path(__file__).parent.parent
-
-
-class BoothConfig(BaseModel):
-    """
-    Settings to be passed to UI
-    """
-
-    countdown_capture_seconds: int = 10
-    inactivity_return_seconds: int = 30
-    booth_title: str = "Photo Booth"
-    default_printer: str = "Canon_SELPHY_CP1500"
-
-    @staticmethod
-    def from_args() -> "BoothConfig":
-        """
-        Create from CLI arguments
-        :return:
-        """
-        parser = argparse.ArgumentParser(description="Photo booth")
-
-        parser.add_argument("--countdown", type=int, default=10, help="Countdown seconds before capture")
-        parser.add_argument("--inactivity", type=int, default=30, help="Seconds of inactivity before returning to start")
-        parser.add_argument("--title", type=str, default="Photo Booth", help="Title of the photo booth")
-        parser.add_argument("--printer", type=str, default="Canon_SELPHY_CP1500", help="Name of the printer to use")
-        args = parser.parse_args()
-        return BoothConfig(
-            countdown_capture_seconds=args.countdown, inactivity_return_seconds=args.inactivity, booth_title=args.title, default_printer=args.printer
-        )
 
 
 @asynccontextmanager
@@ -95,7 +65,7 @@ def config():
 
     :return:
     """
-    return BoothConfig.from_args()
+    return booth_config
 
 
 @backend_router.get("/last")
