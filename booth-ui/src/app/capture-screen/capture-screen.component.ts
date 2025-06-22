@@ -9,7 +9,12 @@ import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { firstValueFrom, interval, Subscription } from 'rxjs';
-import { CaptureService, Layout, SnapshotResponse } from '../capture.service';
+import {
+  BoothConfig,
+  CaptureService,
+  Layout,
+  SnapshotResponse,
+} from '../capture.service';
 import { CONFIG } from '../config';
 import { PrintDialogComponent } from '../print-dialog/print-dialog.component';
 
@@ -22,7 +27,7 @@ import { PrintDialogComponent } from '../print-dialog/print-dialog.component';
 export class CaptureScreenComponent implements OnInit, OnDestroy {
   countDownActive = signal(false);
   captureActive = signal(false);
-  countDownRemaining = signal(CONFIG.COUNTDOWN_CAPTURE_SECONDS);
+  countDownRemaining = signal(0);
 
   activeSnapshot: WritableSignal<SnapshotResponse | undefined> =
     signal(undefined);
@@ -38,12 +43,18 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     name: 'Default',
   };
   private snapshotStack: SnapshotResponse[] = [];
+  private config?: BoothConfig;
 
   constructor(
     private cs: CaptureService,
     private router: Router,
     private dialog: MatDialog,
-  ) {}
+  ) {
+    this.cs.getConfig().subscribe((config) => {
+      this.config = config;
+      this.countDownRemaining.set(config.countdown_capture_seconds);
+    });
+  }
 
   ngOnInit() {
     this.startInactivityTimer();
@@ -58,7 +69,10 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   private startInactivityTimer() {
     this.clearInactivityTimer();
     this.inactivityTimer = interval(1000).subscribe(async (i) => {
-      if (i >= CONFIG.INACTIVITY_RETURN_SECONDS && !this.activeSnapshot()) {
+      if (
+        i >= this.config!.inactivity_return_seconds &&
+        !this.activeSnapshot()
+      ) {
         this.clearInactivityTimer();
         await this.leave();
       }
@@ -106,7 +120,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
   }
 
   async countDownAndSnapshot(count: number = 1, delaySeconds?: number) {
-    if(this.countDownActive()) {
+    if (this.countDownActive()) {
       return;
     }
     await this.restartStream();
@@ -114,7 +128,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     this.resetInactivityTimer();
     this.countDownActive.set(true);
     this.countDownRemaining.set(
-      delaySeconds || CONFIG.COUNTDOWN_CAPTURE_SECONDS,
+      delaySeconds || this.config!.countdown_capture_seconds,
     );
 
     await new Promise<void>((resolve) => {
@@ -122,7 +136,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
         this.countDownRemaining.update((v) => v - 1);
         if (this.countDownRemaining() <= 0) {
           clearInterval(int);
-          if(this.countDownActive()) {
+          if (this.countDownActive()) {
             resolve();
           }
         }
@@ -153,7 +167,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
     } else {
       await this.countDownAndSnapshot(
         count - 1,
-        CONFIG.COUNTDOWN_CAPTURE_SECONDS,
+        this.config!.countdown_capture_seconds,
       );
     }
   }
@@ -192,7 +206,7 @@ export class CaptureScreenComponent implements OnInit, OnDestroy {
             image_path: this.activeSnapshot()!.image_path,
             copies: result.copies,
             landscape: true,
-            printer_name: 'Canon_SELPHY_CP1500',
+            printer_name: this.config!.default_printer,
             cmd_args: ['-o', 'PageSize=Postcard.Fullbleed'],
           }),
         );

@@ -40,6 +40,13 @@ export interface SnapshotResponse {
   all_paths: string[];
 }
 
+export interface BoothConfig {
+  countdown_capture_seconds: number;
+  inactivity_return_seconds: number;
+  booth_title: string;
+  default_printer: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -52,6 +59,13 @@ export class CaptureService {
    */
   captureSnapshot(): Observable<SnapshotResponse> {
     return this.http.get<SnapshotResponse>(`${CONFIG.BACKEND_URL}/snapshot`);
+  }
+
+  getConfig(): Observable<BoothConfig> {
+    /**
+     * Get the active config.
+     */
+    return this.http.get<BoothConfig>(`${CONFIG.BACKEND_URL}/config`);
   }
 
   /**

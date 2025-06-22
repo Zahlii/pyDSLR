@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from PIL import Image
+from pydantic import BaseModel
 
 
 class PrinterError(Exception):
@@ -93,21 +94,15 @@ class PrinterService:
     def print_image(
         cls,
         image_path: Path,
-        copies: int = 1,
-        landscape: bool = True,
-        printer_name: str | None = None,
-        print_args: Optional[List[str]] = None,
+        request: "PrintRequest",
         border: int = 0,
     ) -> bool:
         """
         Print an image using lpr command.
 
         :param border:
-        :param print_args: Additional settings to be passed to lpr
-        :param printer_name: Override default printer
+        :param request:
         :param image_path: Path to the image file
-        :param copies: Number of copies to print, defaults to 1
-        :param landscape: Whether to print in landscape orientation, defaults to True
         :return: True if printing was successful
         """
         if not image_path.exists():
@@ -140,7 +135,7 @@ class PrinterService:
                     image_path = Path(tmp.name)
 
         # Get printer
-        printer = printer_name or cls.get_default_printer()
+        printer = request.printer_name or cls.get_default_printer()
 
         # Build the lpr command
         cmd = ["lpr"]
@@ -150,15 +145,15 @@ class PrinterService:
             cmd.extend(["-P", printer])
 
         # Add copies
-        if copies > 1:
-            cmd.extend(["-#", str(copies)])
+        if request.copies > 1:
+            cmd.extend(["-#", str(request.copies)])
 
         # Add landscape option
-        if landscape:
+        if request.landscape:
             cmd.extend(["-o", "landscape"])
 
-        if print_args:
-            cmd.extend(print_args)
+        if request.cmd_args is not None:
+            cmd.extend(request.cmd_args)
 
         # Add the file to print
         cmd.append(str(image_path))
@@ -173,3 +168,15 @@ if __name__ == "__main__":
     print(ps.get_all_printers())
 
     # ps.print_image(Path("~/Downloads/test.txt").expanduser(), copies=1, landscape=False)
+
+
+class PrintRequest(BaseModel):
+    """
+    Print request with settings
+    """
+
+    image_path: str
+    copies: int = 1
+    landscape: bool = True
+    printer_name: str | None = None
+    cmd_args: List[str] | None = None

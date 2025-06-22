@@ -2,6 +2,7 @@
 REST Server to communicate with Camera
 """
 
+import argparse
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
@@ -17,7 +18,7 @@ from starlette.responses import FileResponse
 
 from booth.capture_device import OverlayCaptureDevice
 from booth.layout_engine import Layout, LayoutEngine, SnapshotResponse, img_path
-from booth.printer import PrinterService
+from booth.printer import PrinterService, PrintRequest
 
 camera: Optional[OverlayCaptureDevice] = None
 
@@ -25,16 +26,32 @@ camera: Optional[OverlayCaptureDevice] = None
 root_path = Path(__file__).parent.parent
 
 
-class PrintRequest(BaseModel):
+class BoothConfig(BaseModel):
     """
-    Print request with settings
+    Settings to be passed to UI
     """
 
-    image_path: str
-    copies: int = 1
-    landscape: bool = True
-    printer_name: str | None = None
-    cmd_args: List[str] | None = None
+    countdown_capture_seconds: int = 10
+    inactivity_return_seconds: int = 30
+    booth_title: str = "Photo Booth"
+    default_printer: str = "Canon_SELPHY_CP1500"
+
+    @staticmethod
+    def from_args() -> "BoothConfig":
+        """
+        Create from CLI arguments
+        :return:
+        """
+        parser = argparse.ArgumentParser(description="Photo booth")
+
+        parser.add_argument("--countdown", type=int, default=10, help="Countdown seconds before capture")
+        parser.add_argument("--inactivity", type=int, default=30, help="Seconds of inactivity before returning to start")
+        parser.add_argument("--title", type=str, default="Photo Booth", help="Title of the photo booth")
+        parser.add_argument("--printer", type=str, default="Canon_SELPHY_CP1500", help="Name of the printer to use")
+        args = parser.parse_args()
+        return BoothConfig(
+            countdown_capture_seconds=args.countdown, inactivity_return_seconds=args.inactivity, booth_title=args.title, default_printer=args.printer
+        )
 
 
 @asynccontextmanager
@@ -71,6 +88,16 @@ def stream():
     return StreamingResponse(camera.stream_preview(max_fps=60, max_time=timedelta(seconds=35)), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
+@backend_router.get("/config")
+def config():
+    """
+    Return the complete configuration
+
+    :return:
+    """
+    return BoothConfig.from_args()
+
+
 @backend_router.get("/last")
 def last_image():
     """
@@ -85,8 +112,8 @@ def last_image():
     return None
 
 
-@backend_router.get("/config")
-def config():
+@backend_router.get("/camera_config")
+def camera_config():
     """
 
     :return:
@@ -156,10 +183,7 @@ def do_print(print_request: PrintRequest):
 
     return PrinterService.print_image(
         image_path=full_path,
-        copies=print_request.copies,
-        printer_name=print_request.printer_name,
-        landscape=print_request.landscape,
-        print_args=print_request.cmd_args,
+        request=print_request,
         border=75,
     )
 
