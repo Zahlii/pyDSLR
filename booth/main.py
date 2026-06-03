@@ -154,7 +154,7 @@ def do_print(print_request: PrintRequest):
     return PrinterService.print_image(
         image_path=full_path,
         request=print_request,
-        border=75,
+        border=booth_config.print_padding,
     )
 
 

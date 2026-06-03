@@ -8,5 +8,25 @@
         "name": "4 Pictures, No Overlay",
         "file": null,
         "layout": "2x2"
+    },
+    {
+        "name": "1 Picture, Overlay 1",
+        "file": "1_transparent.png",
+        "layout": "1"
+    },
+    {
+        "name": "1 Picture, Overlay 2",
+        "file": "2_transparent.png",
+        "layout": "1"
+    },
+    {
+        "name": "1 Picture, Overlay 5",
+        "file": "5_transparent.png",
+        "layout": "1"
+    },
+    {
+        "name": "1 Picture, Overlay 6",
+        "file": "6_transparent.png",
+        "layout": "1"
     }
 ]

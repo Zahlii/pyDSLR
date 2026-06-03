@@ -29,6 +29,7 @@ class BoothConfig(BaseModel):
     default_printer: str = "Canon_SELPHY_CP1500"
     folder_name: str = "new-event"
     mirror_image: bool = False
+    print_padding: int = 0
 
     @staticmethod
     def from_args() -> "BoothConfig":
@@ -43,6 +44,7 @@ class BoothConfig(BaseModel):
         parser.add_argument("--title", type=str, default="Photo Booth", help="Title of the photo booth")
         parser.add_argument("--printer", type=str, default="Canon_SELPHY_CP1500", help="Name of the printer to use")
         parser.add_argument("--mirror", action="store_true", help="Mirror the image (except for RAW files)")
+        parser.add_argument("--print-padding", type=int, default=0, help="Pixels of padding added around image before printing")
         parser.add_argument(
             "--folder",
             type=str,
@@ -51,7 +53,13 @@ class BoothConfig(BaseModel):
         )
         args = parser.parse_args()
         return BoothConfig(
-            countdown_capture_seconds=args.countdown, inactivity_return_seconds=args.inactivity, booth_title=args.title, default_printer=args.printer
+            countdown_capture_seconds=args.countdown,
+            inactivity_return_seconds=args.inactivity,
+            booth_title=args.title,
+            default_printer=args.printer,
+            folder_name=args.folder,
+            mirror_image=args.mirror,
+            print_padding=args.print_padding,
         )
 
 
@@ -183,9 +191,9 @@ class LayoutEngine:
         Initiates the used capture device
         :return:
         """
-        LayoutEngine._camera = OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None, mirror_image=booth_config.mirror_image)
-        yield LayoutEngine._camera
-        return
+        # LayoutEngine._camera = OverlayCaptureDevice(OpenCVCaptureDevice(), overlay_path=None, mirror_image=booth_config.mirror_image)
+        # yield LayoutEngine._camera
+        # return
 
         from pydslr.config.r6m2 import R6M2Config
 
